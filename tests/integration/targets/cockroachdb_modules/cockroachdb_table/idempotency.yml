@@ -1,0 +1,25 @@
+---
+- name: Create the same test table again (idempotency check)
+  cockroach_labs.cockroachdb.cockroachdb_table:
+    name: "{{ test_table }}"
+    database: "{{ test_db }}"
+    state: present
+    columns:
+      - name: id
+        type: UUID
+        primary_key: true
+        default: gen_random_uuid()
+      - name: name
+        type: STRING
+      - name: email
+        type: STRING
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: table_idempotent_result
+
+- name: Verify table idempotency
+  ansible.builtin.assert:
+    that:
+      - table_idempotent_result is not changed

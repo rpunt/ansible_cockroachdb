@@ -1,0 +1,57 @@
+---
+# Example playbook for managing CockroachDB cluster settings
+- name: Configure CockroachDB cluster settings
+  hosts: cockroachdb_servers
+  gather_facts: false
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+
+  tasks:
+    - name: Set cluster organization
+      cockroachdb_parameter:
+        parameters:
+          cluster.organization: "My Organization"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Enable distributed SQL execution
+      cockroachdb_parameter:
+        parameters:
+          sql.defaults.distsql: "on"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Set SQL memory limit
+      cockroachdb_parameter:
+        parameters:
+          sql.defaults.memory.size: "25%"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Set session timeout
+      cockroachdb_parameter:
+        parameters:
+          server.session_timeout: "1h"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"

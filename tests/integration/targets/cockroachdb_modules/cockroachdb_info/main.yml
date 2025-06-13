@@ -1,0 +1,26 @@
+---
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+
+- name: Get CockroachDB info
+  cockroachdb_info:
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+    gather_subset: ['cluster', 'databases']
+  register: crdb_info
+
+- name: Verify result contains cluster info
+  ansible.builtin.assert:
+    that:
+      - crdb_info.cluster is defined
+      - crdb_info.cluster.version is defined or crdb_info.cluster.id is defined
+
+- name: Print cluster information
+  ansible.builtin.debug:
+    var: crdb_info.cluster

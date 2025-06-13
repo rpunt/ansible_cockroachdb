@@ -1,0 +1,247 @@
+---
+# Example playbook for CockroachDB maintenance operations
+- name: Perform CockroachDB maintenance operations
+  hosts: cockroachdb_servers
+  gather_facts: false
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+
+  tasks:
+    - name: Gather cluster information
+      cockroachdb_info:
+        gather_subset: ['cluster', 'nodes', 'databases']
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: cluster_info
+
+    # Check cluster health
+    - name: Check node status
+      cockroachdb_maintenance:
+        operation: node_status
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: node_status
+
+    - name: Display node status
+      ansible.builtin.debug:
+        var: node_status.nodes
+
+    # Set custom garbage collection for audit logs
+    - name: Configure custom GC for audit logs
+      cockroachdb_maintenance:
+        operation: gc
+        database: app_db
+        table: audit_logs
+        ttl: "90d"  # Keep audit logs for 90 days
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: gc_result
+
+    # Set custom garbage collection for different tables
+    - name: Configure custom GC periods
+      cockroachdb_maintenance:
+        operation: gc
+        database: "{{ item.database }}"
+        table: "{{ item.table }}"
+        ttl: "{{ item.ttl }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - database: app_db
+          table: user_sessions
+          ttl: "7d"  # Retain session data for 7 days
+        - database: app_db
+          table: access_logs
+          ttl: "30d"  # Retain access logs for 30 days
+        - database: analytics_db
+          table: events_raw
+          ttl: "180d"  # Retain raw events for 180 days
+      register: gc_configs
+
+    # Compact storage for large tables
+    - name: Compact large tables
+      cockroachdb_maintenance:
+        operation: compact
+        database: "{{ item.database }}"
+        table: "{{ item.table }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - database: app_db
+          table: user_events
+        - database: app_db
+          table: order_history
+        - database: analytics_db
+          table: daily_aggregates
+      register: compact_result
+
+    # Clean up orphaned schema objects
+    - name: Clean up schema objects
+      cockroachdb_maintenance:
+        operation: schema_cleanup
+        database: app_db
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: cleanup_result
+
+    - name: Display schema cleanup results
+      ansible.builtin.debug:
+        var: cleanup_result.schema_objects
+
+    # Configure zone settings for high availability
+    - name: Configure zone settings for critical tables
+      cockroachdb_maintenance:
+        operation: zone_config
+        zone_configs:
+          target: "TABLE app_db.users"
+          config:
+            num_replicas: 5
+            constraints:
+              - key: region
+                value: us-east
+                type: required
+              - key: region
+                value: us-west
+                type: required
+            lease_preferences:
+              - constraints:
+                - key: region
+                  value: us-east
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: zone_config_result
+
+    # Check if the cluster is ready for a version upgrade
+    - name: Check version upgrade readiness
+      cockroachdb_maintenance:
+        operation: version_upgrade_check
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: upgrade_check
+
+    - name: Display upgrade readiness
+      ansible.builtin.debug:
+        var: upgrade_check.details.version_upgrade
+
+    # Conditional decommissioning based on node status check
+    - name: Find unhealthy nodes
+      ansible.builtin.set_fact:
+        unhealthy_nodes: "{{ node_status.nodes | selectattr('is_live', 'equalto', false) | list }}"
+
+    - name: Decommission unhealthy nodes
+      cockroachdb_maintenance:
+        operation: node_decommission
+        node_id: "{{ item.id }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop: "{{ unhealthy_nodes }}"
+      register: decommission_result
+      when: unhealthy_nodes | length > 0
+
+    # Cancel long-running import jobs
+    - name: Cancel running import jobs
+      cockroachdb_maintenance:
+        operation: cancel_jobs
+        job_type: "IMPORT"
+        job_status: "running"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: cancel_imports
+
+    # Troubleshoot a slow query
+    - name: Analyze problematic query
+      cockroachdb_maintenance:
+        operation: troubleshoot_query
+        troubleshoot_options:
+          query_text: >
+            SELECT users.*, orders.* FROM users
+            JOIN orders ON users.id = orders.user_id
+            WHERE users.region = 'EU'
+              AND orders.created_at > now() - INTERVAL '30 days'
+          collect_explain: true
+          collect_trace: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: query_analysis
+
+    # Trigger data rebalancing
+    - name: Rebalance data with dry run first
+      cockroachdb_maintenance:
+        operation: rebalance_data
+        rebalance_options:
+          dry_run: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: rebalance_dryrun
+
+    - name: Display rebalance dry run results
+      ansible.builtin.debug:
+        var: rebalance_dryrun.rebalance
+
+    - name: Perform actual data rebalancing if needed
+      cockroachdb_maintenance:
+        operation: rebalance_data
+        rebalance_options:
+          dry_run: false
+          max_moves: 200
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: rebalance_result
+      when: rebalance_dryrun.rebalance.ranges_moved | default(0) > 10

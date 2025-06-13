@@ -1,0 +1,124 @@
+---
+#
+# Idempotency Test for cockroachdb_backup module
+#
+
+- name: Set test backup URI
+  ansible.builtin.set_fact:
+    test_backup_uri: "userfile:///backup-idempotency-test"
+
+#
+# Backup idempotency tests
+#
+- name: Perform initial backup (first run)
+  cockroachdb_backup:
+    operation: backup
+    database: "{{ test_db }}"
+    uri: "{{ test_backup_uri }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: initial_backup_result
+  ignore_errors: true  # Some environments might not support userfiles
+
+- name: Display initial backup result
+  ansible.builtin.debug:
+    var: initial_backup_result
+
+- name: Run backup again with same parameters (second run)
+  cockroachdb_backup:
+    operation: backup
+    database: "{{ test_db }}"
+    uri: "{{ test_backup_uri }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: second_backup_result
+  ignore_errors: true
+  when: not initial_backup_result is failed
+
+- name: Display second backup result
+  ansible.builtin.debug:
+    var: second_backup_result
+  when: not initial_backup_result is failed
+
+- name: Verify backup idempotency
+  ansible.builtin.assert:
+    that:
+      - not second_backup_result.changed or second_backup_result is failed
+    fail_msg: "Backup operation is not idempotent: created duplicate backup"
+  when: not initial_backup_result is failed
+
+#
+# Restore idempotency tests
+#
+- name: Set test database for restore
+  ansible.builtin.set_fact:
+    restore_db: "{{ test_db }}_restored"
+
+- name: Drop restore database if it exists
+  cockroachdb_db:
+    name: "{{ restore_db }}"
+    state: absent
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  ignore_errors: true
+
+- name: Perform initial restore (first run)
+  cockroachdb_backup:
+    operation: restore
+    database: "{{ restore_db }}"
+    uri: "{{ test_backup_uri }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: initial_restore_result
+  ignore_errors: true
+  when: not initial_backup_result is failed
+
+- name: Display initial restore result
+  ansible.builtin.debug:
+    var: initial_restore_result
+  when: not initial_backup_result is failed and not initial_restore_result is failed
+
+- name: Run restore again with same parameters (second run)
+  cockroachdb_backup:
+    operation: restore
+    database: "{{ restore_db }}"
+    uri: "{{ test_backup_uri }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: second_restore_result
+  ignore_errors: true
+  when: not initial_backup_result is failed and not initial_restore_result is failed
+
+- name: Display second restore result
+  ansible.builtin.debug:
+    var: second_restore_result
+  when: not initial_backup_result is failed and not initial_restore_result is failed
+
+- name: Verify restore idempotency
+  ansible.builtin.assert:
+    that:
+      - not second_restore_result.changed or second_restore_result is failed
+    fail_msg: "Restore operation is not idempotent: duplicate restore"
+  when: not initial_backup_result is failed and not initial_restore_result is failed
+
+# Clean up after ourselves
+- name: Clean up - Drop restore database
+  cockroachdb_db:
+    name: "{{ restore_db }}"
+    state: absent
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  ignore_errors: true
+  when: not initial_backup_result is failed

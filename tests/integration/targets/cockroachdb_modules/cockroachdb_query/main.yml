@@ -1,0 +1,35 @@
+---
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+    test_db: cockroachdb_query_db
+    test_table: cockroachdb_query_table
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml
+
+- name: Setup
+  ansible.builtin.import_tasks: setup.yml
+
+- name: Insert data using query
+  cockroachdb_query:
+    database: "{{ test_db }}"
+    query: >
+      INSERT INTO {{ test_table }} (name, email)
+      VALUES ('Test User', 'test@example.com')
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: query_result
+
+- name: Verify query execution
+  ansible.builtin.assert:
+    that:
+      - query_result is changed
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml

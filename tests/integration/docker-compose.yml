@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  cockroachdb:
+    image: cockroachdb/cockroach:latest
+    container_name: cockroachdb-test
+    command: start-single-node --insecure
+    ports:
+      - "26257:26257"
+      - "8080:8080"
+    volumes:
+      - cockroachdb-data:/cockroach/cockroach-data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  cockroachdb-data:

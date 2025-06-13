@@ -1,0 +1,173 @@
+---
+# Example playbook for managing CockroachDB statistics
+- name: Manage CockroachDB statistics
+  hosts: cockroachdb_servers
+  gather_facts: false
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+
+  tasks:
+    - name: Gather current database information
+      cockroachdb_info:
+        gather_subset: ['databases', 'tables']
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: db_info
+
+    # Configure auto stats collection for better performance
+    - name: Configure automatic statistics collection
+      cockroachdb_statistics:
+        operation: configure
+        auto_stats:
+          enabled: true
+          fraction: 0.2
+          min_rows_threshold: 500
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: auto_stats_result
+
+    - name: Display automatic statistics configuration
+      ansible.builtin.debug:
+        var: auto_stats_result.settings
+
+    # Create statistics for all tables in a database
+    - name: Create statistics for all tables in the application database
+      cockroachdb_statistics:
+        database: app_db
+        operation: create
+        options:
+          throttling: 0.3  # Reduce impact on cluster
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: all_tables_stats
+
+    - name: Display all tables statistics results
+      ansible.builtin.debug:
+        var: all_tables_stats
+
+    # Create detailed statistics for tables with JOIN columns
+    - name: Create detailed join column statistics
+      cockroachdb_statistics:
+        database: app_db
+        table: "{{ item.table }}"
+        columns: "{{ item.columns }}"
+        operation: create
+        options:
+          histogram_buckets: 200  # More detailed histograms for better cardinality estimates
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - table: users
+          columns: [id, region_id, created_at]
+        - table: orders
+          columns: [user_id, status, order_date]
+        - table: products
+          columns: [category_id, price]
+      register: join_stats
+
+    # Create statistics for tables with high update frequency
+    - name: Create statistics for high-velocity tables
+      cockroachdb_statistics:
+        database: app_db
+        table: "{{ item }}"
+        operation: create
+        options:
+          histogram_buckets: 100
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - active_sessions
+        - user_events
+        - api_requests
+      register: high_velocity_stats
+
+    # Create statistics for timestamp columns that are frequently filtered
+    - name: Create statistics for time-based filters
+      cockroachdb_statistics:
+        database: app_db
+        table: "{{ item.table }}"
+        columns: "{{ item.columns }}"
+        operation: create
+        options:
+          histogram_buckets: 50
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - table: orders
+          columns: [order_date]
+        - table: user_events
+          columns: [event_time]
+        - table: system_logs
+          columns: [timestamp]
+      register: time_stats
+
+    # Delete statistics for deprecated tables
+    - name: Delete statistics for deprecated tables
+      cockroachdb_statistics:
+        database: app_db
+        table: "{{ item }}"
+        operation: delete
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - legacy_users
+        - temp_import
+        - old_products
+      register: delete_stats
+
+    # Create custom statistics for analytical queries
+    - name: Create statistics for analytical query columns
+      cockroachdb_statistics:
+        database: analytics_db
+        table: "{{ item.table }}"
+        columns: "{{ item.columns }}"
+        operation: create
+        options:
+          histogram_buckets: 500  # Very detailed histograms for analytics
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - table: customer_metrics
+          columns: [customer_segment, lifetime_value, acquisition_channel]
+        - table: product_performance
+          columns: [product_category, revenue, margin, units_sold]
+        - table: marketing_campaigns
+          columns: [campaign_type, cost_per_click, conversion_rate]
+      register: analytics_stats

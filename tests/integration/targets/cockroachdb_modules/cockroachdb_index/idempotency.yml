@@ -1,0 +1,19 @@
+---
+- name: Create an index on the test table (idempotency test)
+  cockroach_labs.cockroachdb.cockroachdb_index:
+    name: "{{ test_index }}"
+    database: "{{ test_db }}"
+    table: "{{ test_table }}"
+    columns:
+      - name
+    unique: false
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: index_idempotency_result
+
+- name: Verify index creation
+  ansible.builtin.assert:
+    that:
+      - index_idempotency_result is not changed

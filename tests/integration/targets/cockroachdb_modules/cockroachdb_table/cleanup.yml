@@ -1,0 +1,32 @@
+---
+- name: Cleanup test objects
+  block:
+    - name: Remove test users
+      cockroach_labs.cockroachdb.cockroachdb_user:
+        name: "{{ test_user }}"
+        state: absent
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        login_user: root
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      ignore_errors: true
+
+    - name: Remove test database
+      cockroach_labs.cockroachdb.cockroachdb_db:
+        name: "{{ test_db }}"
+        state: absent
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: root
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      ignore_errors: true
+
+    - name: Create test database
+      cockroach_labs.cockroachdb.cockroachdb_db:
+        name: "{{ test_db }}"
+        state: present
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: root
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      ignore_errors: true

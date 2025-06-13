@@ -1,0 +1,41 @@
+---
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+    test_db: cockroachdb_index_db
+    test_table: cockroachdb_index_table
+    test_index: idx_users_name
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml
+
+- name: Setup
+  ansible.builtin.import_tasks: setup.yml
+
+- name: Create an index on the test table
+  cockroach_labs.cockroachdb.cockroachdb_index:
+    name: "{{ test_index }}"
+    database: "{{ test_db }}"
+    table: "{{ test_table }}"
+    columns:
+      - name
+    unique: false
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: index_result
+
+- name: Verify index creation
+  ansible.builtin.assert:
+    that:
+      - index_result is changed
+
+- name: Idempotency testing
+  ansible.builtin.import_tasks: idempotency.yml
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml

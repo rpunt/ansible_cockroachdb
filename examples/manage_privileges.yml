@@ -1,0 +1,182 @@
+---
+# Example playbook for managing CockroachDB privileges
+- name: Manage CockroachDB privileges
+  hosts: cockroachdb_servers
+  gather_facts: false
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+
+  tasks:
+    - name: Gather current role and privilege information
+      cockroachdb_info:
+        gather_subset: ['roles', 'privileges']
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: role_info
+
+    - name: Display current roles and privileges
+      ansible.builtin.debug:
+        var: role_info
+
+    # Example of granting database-level privileges
+    - name: Grant database-level privileges
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - CONNECT
+          - CREATE
+        on_type: database
+        object_name: app_db
+        database: app_db
+        roles:
+          - app_user
+          - app_admin
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: db_privileges
+
+    - name: Display database privilege results
+      ansible.builtin.debug:
+        var: db_privileges
+
+    # Example of granting table-level privileges
+    - name: Grant table-level privileges for users table
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - SELECT
+          - INSERT
+          - UPDATE
+        on_type: table
+        object_name: users
+        schema: public
+        database: app_db
+        roles:
+          - app_user
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: table_privileges
+
+    # Example of granting column-level privileges for sensitive data
+    - name: Grant limited column-level privileges
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - "SELECT(id, username, created_at)"
+          - "UPDATE(username, email)"
+        on_type: table
+        object_name: users
+        schema: public
+        database: app_db
+        roles:
+          - support_user
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: column_privileges
+
+    # Example of granting ALL privileges with grant option
+    - name: Grant all privileges with grant option for admin
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - ALL
+        on_type: database
+        object_name: app_db
+        database: app_db
+        roles:
+          - app_admin
+        with_grant_option: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: admin_privileges
+
+    # Example of revoking privileges
+    - name: Revoke DROP privileges from developer
+      cockroachdb_privilege:
+        state: revoke
+        privileges:
+          - DROP
+        on_type: database
+        object_name: app_db
+        database: app_db
+        roles:
+          - developer
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: revoke_privileges
+
+    # Apply multiple privilege sets using a loop
+    - name: Setup role-based access control for all tables
+      cockroachdb_privilege:
+        state: grant
+        privileges: "{{ item.privileges }}"
+        on_type: table
+        object_name: "{{ item.table }}"
+        schema: public
+        database: app_db
+        roles: "{{ item.roles }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - table: customers
+          privileges: [SELECT, INSERT, UPDATE]
+          roles: [app_user, sales_user]
+        - table: orders
+          privileges: [SELECT, INSERT]
+          roles: [app_user, sales_user]
+        - table: inventory
+          privileges: [SELECT]
+          roles: [app_user, sales_user]
+        - table: products
+          privileges: [SELECT, INSERT, UPDATE, DELETE]
+          roles: [product_manager]
+      register: rbac_privileges
+
+    - name: Final privilege verification
+      cockroachdb_info:
+        gather_subset: ['privileges']
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+        database: app_db
+      register: final_privileges
+
+    - name: Display final privilege assignments
+      ansible.builtin.debug:
+        var: final_privileges.privileges

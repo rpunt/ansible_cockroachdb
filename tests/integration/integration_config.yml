@@ -1,0 +1,13 @@
+---
+modules:
+  - cockroachdb_info
+  - cockroachdb_db
+  - cockroachdb_user
+  - cockroachdb_table
+  - cockroachdb_index
+  - cockroachdb_maintenance
+  - cockroachdb_parameter
+  - cockroachdb_privilege
+  - cockroachdb_query
+  - cockroachdb_statistics
+  - cockroachdb_backup

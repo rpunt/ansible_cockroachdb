@@ -1,0 +1,35 @@
+---
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+    test_db: cockroachdb_statistics_db
+    test_table: cockroachdb_statistics_table
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml
+
+- name: Setup
+  ansible.builtin.import_tasks: setup.yml
+
+# - name: Create statistics for the test table
+#   cockroachdb_statistics:
+#     database: "{{ test_db }}"
+#     table: "{{ test_table }}"
+#     columns:
+#       - name
+#     operation: create
+#     host: localhost
+#     port: 26257
+#     user: root
+#     ssl_mode: disable
+#   register: stats_result
+#   ignore_errors: true  # Some environments might not support this
+
+- name: Idempotency tests
+  ansible.builtin.import_tasks: idempotency.yml
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml

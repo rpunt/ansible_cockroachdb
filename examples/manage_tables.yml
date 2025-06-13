@@ -1,0 +1,112 @@
+---
+# Example playbook for managing CockroachDB tables
+- name: Manage CockroachDB tables
+  hosts: cockroachdb_servers
+  gather_facts: false
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+
+  tasks:
+    - name: Create users table
+      cockroachdb_table:
+        name: users
+        database: production
+        state: present
+        columns:
+          - name: id
+            type: UUID
+            primary_key: true
+            nullable: false
+            default: "gen_random_uuid()"
+          - name: username
+            type: STRING
+            nullable: false
+          - name: email
+            type: STRING
+            nullable: false
+          - name: created_at
+            type: TIMESTAMP
+            default: "now()"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: users_table
+
+    - name: Create orders table
+      cockroachdb_table:
+        name: orders
+        database: production
+        state: present
+        columns:
+          - name: id
+            type: UUID
+            primary_key: true
+            nullable: false
+            default: "gen_random_uuid()"
+          - name: user_id
+            type: UUID
+            nullable: false
+          - name: total_amount
+            type: DECIMAL
+            nullable: false
+          - name: created_at
+            type: TIMESTAMP
+            default: "now()"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create products table with composite primary key
+      cockroachdb_table:
+        name: products
+        database: production
+        state: present
+        columns:
+          - name: id
+            type: UUID
+            nullable: false
+            default: "gen_random_uuid()"
+          - name: category_id
+            type: UUID
+            nullable: false
+          - name: name
+            type: STRING
+            nullable: false
+          - name: price
+            type: DECIMAL
+            nullable: false
+          - name: description
+            type: TEXT
+          - name: created_at
+            type: TIMESTAMP
+            default: "now()"
+        primary_key: ["id", "category_id"]
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Drop old table
+      cockroachdb_table:
+        name: deprecated_table
+        database: production
+        state: absent
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"

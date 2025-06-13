@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CockroachDB Statistics Report - {{ database }}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #046A38;  /* CockroachDB green */
+        }
+        h1 {
+            border-bottom: 2px solid #046A38;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .info-item {
+            margin-bottom: 10px;
+        }
+        .info-label {
+            font-weight: bold;
+            display: inline-block;
+            width: 150px;
+        }
+        .size-bar-container {
+            width: 100%;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+        .size-bar {
+            height: 20px;
+            background-color: #046A38;
+            border-radius: 4px;
+            text-align: right;
+            color: white;
+            padding-right: 5px;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.8em;
+            color: #666;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CockroachDB Cluster Report</h1>
+
+        <div class="card">
+            <h2>Cluster Information</h2>
+            {% if crdb_info.cluster is defined %}
+            <div class="info-item">
+                <span class="info-label">Version:</span>
+                <span>{{ crdb_info.cluster.version }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Enterprise Edition:</span>
+                <span>{{ crdb_info.cluster.enterprise | default(false) }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Node Count:</span>
+                <span>{{ crdb_info.cluster.node_count }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Cluster ID:</span>
+                <span>{{ crdb_info.cluster.id }}</span>
+            </div>
+            {% else %}
+            <p>No cluster information available.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Database Statistics - {{ database }}</h2>
+            <div class="info-item">
+                <span class="info-label">Size:</span>
+                <span>{{ (db_size | default(0) / 1024 / 1024) | round(2) }} MB</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Number of Tables:</span>
+                <span>{{ tables | length }}</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Table Statistics</h2>
+            {% if statistics %}
+            <table>
+                <tr>
+                    <th>Table Name</th>
+                    <th>Statistics Name</th>
+                    <th>Columns</th>
+                    <th>Row Count</th>
+                    <th>Distinct Count</th>
+                    <th>Null Count</th>
+                    <th>Created</th>
+                </tr>
+                {% for stat in statistics %}
+                <tr>
+                    <td>{{ stat[6] }}</td>
+                    <td>{{ stat[0] }}</td>
+                    <td>{{ stat[1] }}</td>
+                    <td>{{ stat[2] | int }}</td>
+                    <td>{{ stat[3] | int }}</td>
+                    <td>{{ stat[4] | int }}</td>
+                    <td>{{ stat[5] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+            <p>No statistics available.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Table Sizes</h2>
+            {% if table_sizes %}
+            <table>
+                <tr>
+                    <th>Table Name</th>
+                    <th>Size (MB)</th>
+                    <th>Size Distribution</th>
+                </tr>
+                {% set total_size = namespace(value=0) %}
+                {% for table_name, size in table_sizes.items() %}
+                {% set total_size.value = total_size.value + size %}
+                {% endfor %}
+
+                {% for table_name, size in table_sizes.items() | sort(attribute='1', reverse=true) %}
+                <tr>
+                    <td>{{ table_name }}</td>
+                    <td>{{ (size / 1024 / 1024) | round(2) }} MB</td>
+                    <td>
+                        {% if total_size.value > 0 %}
+                        {% set percentage = (size / total_size.value * 100) | round(1) %}
+                        <div class="size-bar-container">
+                            <div class="size-bar" style="width: {{ percentage }}%;">{{ percentage }}%</div>
+                        </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+            <p>No table size information available.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Hot Ranges</h2>
+            {% if hot_ranges %}
+            <table>
+                <tr>
+                    <th>Range ID</th>
+                    <th>Lease Holder</th>
+                    <th>Replicas</th>
+                    <th>Queries/Sec</th>
+                    <th>Writes/Sec</th>
+                </tr>
+                {% for range in hot_ranges %}
+                <tr>
+                    <td>{{ range[0] }}</td>
+                    <td>{{ range[1] }}</td>
+                    <td>{{ range[2] }}</td>
+                    <td>{{ range[4] | float | round(2) }}</td>
+                    <td>{{ range[5] | float | round(2) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+            <p>No hot range information available.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Slow Queries</h2>
+            {% if slow_queries %}
+            <table>
+                <tr>
+                    <th>Count</th>
+                    <th>Query</th>
+                    <th>Avg Latency (ms)</th>
+                    <th>Max Latency (ms)</th>
+                    <th>StdDev Latency</th>
+                </tr>
+                {% for query in slow_queries %}
+                <tr>
+                    <td>{{ query[0] }}</td>
+                    <td><pre>{{ query[2] }}</pre></td>
+                    <td>{{ (query[3] | float * 1000) | round(2) }}</td>
+                    <td>{{ (query[4] | float * 1000) | round(2) }}</td>
+                    <td>{{ (query[5] | float * 1000) | round(2) }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+            <p>No slow query information available.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Index Usage</h2>
+            {% if index_usage %}
+            <table>
+                <tr>
+                    <th>Table</th>
+                    <th>Index</th>
+                    <th>Read Amplification</th>
+                    <th>Row Count</th>
+                </tr>
+                {% for idx in index_usage %}
+                <tr>
+                    <td>{{ idx[0] }}</td>
+                    <td>{{ idx[1] }}</td>
+                    <td>{{ idx[2] | float | round(2) }}</td>
+                    <td>{{ idx[3] | float | int }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+            <p>No index usage information available.</p>
+            {% endif %}
+        </div>
+
+        {% if crdb_info.tables is defined and crdb_info.tables %}
+        {% for db_name, tables in crdb_info.tables.items() %}
+        {% if tables %}
+        <div class="card">
+            <h2>Tables in {{ db_name }}</h2>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Size</th>
+                </tr>
+                {% for table in tables %}
+                <tr>
+                    <td>{{ table }}</td>
+                    <td>
+                        {% if crdb_info.sizes is defined and crdb_info.sizes.tables is defined and
+                              crdb_info.sizes.tables[db_name] is defined and
+                              crdb_info.sizes.tables[db_name][table] is defined %}
+                        {{ (crdb_info.sizes.tables[db_name][table] / 1024 / 1024) | round(2) }} MB
+                        {% else %}
+                        Unknown
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+
+        {% if crdb_info.roles is defined and crdb_info.roles %}
+        <div class="card">
+            <h2>Database Roles</h2>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Superuser</th>
+                    <th>Can Login</th>
+                    <th>Can Create DB</th>
+                </tr>
+                {% for role in crdb_info.roles %}
+                <tr>
+                    <td>{{ role.name }}</td>
+                    <td>{{ role.superuser }}</td>
+                    <td>{{ role.can_login }}</td>
+                    <td>{{ role.can_create_db }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% endif %}
+
+        {% if crdb_info.settings is defined and crdb_info.settings %}
+        <div class="card">
+            <h2>Cluster Settings</h2>
+            <table>
+                <tr>
+                    <th>Setting</th>
+                    <th>Value</th>
+                </tr>
+                {% for setting, value in crdb_info.settings.items() %}
+                <tr>
+                    <td>{{ setting }}</td>
+                    <td>{{ value }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>Generated on {{ ansible_date_time.iso8601 }} by Ansible</p>
+        </div>
+    </div>
+</body>
+</html>

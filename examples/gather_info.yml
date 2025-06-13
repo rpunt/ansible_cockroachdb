@@ -1,0 +1,59 @@
+---
+# Example playbook for gathering CockroachDB cluster information
+- name: Gather CockroachDB information
+  hosts: cockroachdb_servers
+  gather_facts: no
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+
+  tasks:
+    - name: Gather all CockroachDB information
+      cockroachdb_info:
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: crdb_info
+
+    - name: Display cluster information
+      debug:
+        var: crdb_info.cluster
+
+    - name: Display databases
+      debug:
+        var: crdb_info.databases
+
+    - name: Display database sizes
+      debug:
+        var: crdb_info.sizes.databases
+
+    - name: Gather detailed information about production database
+      cockroachdb_info:
+        gather_subset: ['tables', 'sizes']
+        database: production
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: production_info
+      when: "'production' in crdb_info.databases"
+
+    - name: Display production database tables
+      debug:
+        var: production_info.tables.production
+      when: "'production' in crdb_info.databases"
+
+    - name: Generate HTML report of database information
+      template:
+        src: templates/cockroachdb_report.html.j2
+        dest: /tmp/cockroachdb_report.html
+      delegate_to: localhost

@@ -1,0 +1,11 @@
+---
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+    test_data_prefix: "cockroachdb_user"
+
+- name: Run idempotency tests
+  ansible.builtin.import_tasks: idempotency.yml

@@ -1,0 +1,33 @@
+---
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+
+- name: Drop test database if it exists
+  cockroachdb_db:
+    name: "{{ test_db }}"
+    state: absent
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: drop_result
+
+- name: Create a test database
+  cockroachdb_db:
+    name: "{{ test_db }}"
+    state: present
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: db_result
+
+- name: Verify database creation
+  ansible.builtin.assert:
+    that:
+      - db_result is changed
+      - db_result.database == test_db

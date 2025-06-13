@@ -1,0 +1,195 @@
+---
+# Example playbook for collecting and analyzing CockroachDB statistics
+- name: Collect and analyze CockroachDB statistics
+  hosts: cockroachdb_servers
+  gather_facts: no
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+    target_database: "production"  # Database to analyze
+    report_dir: "/tmp/cockroachdb_reports"
+    timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+
+  tasks:
+    - name: Ensure report directory exists
+      file:
+        path: "{{ report_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+
+    - name: Optimize parameters for statistics collection
+      cockroachdb_parameter:
+        parameters:
+          sql.stats.automatic_collection.enabled: true
+          sql.stats.histogram_collection.enabled: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Gather basic cluster information
+      cockroachdb_info:
+        gather_subset: ['cluster', 'databases', 'tables', 'sizes']
+        database: "{{ target_database }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: cluster_info
+
+    - name: Create a list of all tables
+      set_fact:
+        all_tables: "{{ cluster_info.tables[target_database] }}"
+
+    - name: Collect table statistics
+      cockroachdb_query:
+        query: |
+          CREATE STATISTICS IF NOT EXISTS {{ item }}_stats ON {{ item }} FROM {{ target_database }}
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop: "{{ all_tables }}"
+      register: stats_collection
+
+    - name: Get statistics for all tables
+      cockroachdb_query:
+        query: |
+          SELECT
+            statistics_name,
+            column_names,
+            row_count,
+            distinct_count,
+            null_count,
+            created,
+            table_name
+          FROM
+            [SHOW STATISTICS FOR DATABASE {{ target_database }}]
+          ORDER BY
+            table_name, created DESC
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: statistics_result
+
+    - name: Get hot ranges information
+      cockroachdb_query:
+        query: |
+          SELECT
+            range_id,
+            lease_holder,
+            replicas,
+            split_enforced_until,
+            queries_per_second,
+            writes_per_second
+          FROM
+            crdb_internal.ranges_hot_spots
+          ORDER BY
+            queries_per_second DESC
+          LIMIT 10
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: hot_ranges
+
+    - name: Get slow queries information
+      cockroachdb_query:
+        query: |
+          SELECT
+            count(*) as query_count,
+            fingerprint_id,
+            query,
+            avg(service_lat) as avg_latency,
+            max(service_lat) as max_latency,
+            stddev(service_lat) as stddev_latency
+          FROM
+            crdb_internal.statement_statistics
+          GROUP BY
+            fingerprint_id, query
+          ORDER BY
+            avg_latency DESC
+          LIMIT 10
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: slow_queries
+
+    - name: Get index usage statistics
+      cockroachdb_query:
+        query: |
+          SELECT
+            table_name,
+            index_name,
+            SUM(statistics -> 'statistics' ->> 'indexMetrics' ->> 'readAmpEstimate') as read_amp,
+            SUM(statistics -> 'statistics' ->> 'rowCount')::FLOAT as row_count
+          FROM
+            crdb_internal.table_indexes
+          WHERE
+            database_name = '{{ target_database }}'
+          GROUP BY
+            table_name, index_name
+          ORDER BY
+            table_name, read_amp DESC
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: index_usage
+
+    - name: Generate HTML report
+      template:
+        src: ../templates/cockroachdb_report.html.j2
+        dest: "{{ report_dir }}/cockroachdb_stats_{{ timestamp }}.html"
+      vars:
+        database: "{{ target_database }}"
+        cluster: "{{ cluster_info.cluster }}"
+        statistics: "{{ statistics_result.query_result }}"
+        hot_ranges: "{{ hot_ranges.query_result }}"
+        slow_queries: "{{ slow_queries.query_result }}"
+        index_usage: "{{ index_usage.query_result }}"
+        db_size: "{{ cluster_info.sizes.databases[target_database] }}"
+        tables: "{{ cluster_info.tables[target_database] }}"
+        table_sizes: "{{ cluster_info.sizes.tables[target_database] }}"
+      delegate_to: localhost
+
+    - name: Report summary
+      debug:
+        msg: |
+          Database statistics collection completed.
+          Statistics collected for {{ all_tables | length }} tables in {{ target_database }}.
+          HTML report generated at {{ report_dir }}/cockroachdb_stats_{{ timestamp }}.html
+
+    - name: Schedule automatic statistics collection
+      cockroachdb_parameter:
+        parameters:
+          sql.stats.automatic_collection.enabled: true
+          sql.stats.automatic_collection.min_stale_rows: "500"
+          sql.stats.automatic_collection.fraction_stale_rows: "0.2"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"

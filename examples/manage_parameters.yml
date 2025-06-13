@@ -1,0 +1,117 @@
+---
+# Example playbook for managing CockroachDB cluster parameters
+- name: Manage CockroachDB cluster parameters
+  hosts: cockroachdb_servers
+  gather_facts: false
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+
+  tasks:
+    - name: Gather current cluster settings
+      cockroachdb_info:
+        gather_subset: ['settings']
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: cluster_info
+
+    - name: Display current settings
+      ansible.builtin.debug:
+        var: cluster_info.settings
+
+    # Example of applying a predefined parameter profile
+    - name: Apply OLTP optimization profile
+      cockroachdb_parameter:
+        profile: oltp
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: oltp_result
+
+    - name: Display OLTP optimization results
+      ansible.builtin.debug:
+        var: oltp_result
+
+    # Example of configuring specific parameters
+    - name: Configure query execution parameters
+      cockroachdb_parameter:
+        parameters:
+          sql.defaults.distsql: "on"
+          sql.distsql.distribute_index_joins: "on"
+          sql.defaults.optimizer: "on"
+          kv.rangefeed.enabled: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: param_result
+
+    - name: Display parameter configuration results
+      ansible.builtin.debug:
+        var: param_result
+
+    # Example of configuring session parameters
+    - name: Configure session parameters for a specific application
+      cockroachdb_parameter:
+        parameters:
+          application_name: "inventory-service"
+          idle_in_transaction_session_timeout: "30s"
+          statement_timeout: "10s"
+        scope: session
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: session_result
+
+    - name: Display session parameter results
+      ansible.builtin.debug:
+        var: session_result
+
+    # Example of resetting a parameter to default
+    - name: Reset parameters to default
+      cockroachdb_parameter:
+        parameters:
+          sql.distsql.temp_storage.workmem: null
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: reset_result
+
+    - name: Display reset results
+      ansible.builtin.debug:
+        var: reset_result
+
+    # Only uncomment for testing purposes - this resets all cluster settings!
+    # - name: Reset all cluster parameters to default
+    #   cockroachdb_parameter:
+    #     reset_all: true
+    #     host: "{{ cockroach_host }}"
+    #     port: "{{ cockroach_port }}"
+    #     user: "{{ cockroach_user }}"
+    #     ssl_cert: "{{ cockroach_ssl_cert }}"
+    #     ssl_key: "{{ cockroach_ssl_key }}"
+    #     ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+    #   register: reset_all_result
+    #
+    # - name: Display reset all results
+    #   debug:
+    #     var: reset_all_result

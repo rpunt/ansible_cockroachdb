@@ -1,0 +1,207 @@
+---
+- name: Test CockroachDB parameter module idempotency
+  block:
+    - name: Set parameter - first run
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          server.time_until_store_dead: "5m"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: first_run
+
+    - name: Display first run result
+      ansible.builtin.debug:
+        var: first_run.debug.comparison_values
+        verbosity: 0
+
+    - name: Set parameter - second run (should be idempotent)
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          server.time_until_store_dead: "5m"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: second_run
+
+    - name: Display second run result
+      ansible.builtin.debug:
+        var: second_run
+        verbosity: 0
+
+    - name: Verify idempotency
+      ansible.builtin.assert:
+        that:
+          - not second_run.changed
+          - second_run.parameters|length == 0
+        fail_msg: "The module is not idempotent. It reported changes on the second run with identical parameters."
+
+    # Test for MiB parameter
+    - name: Set MiB parameter - first run
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          kv.snapshot_rebalance.max_rate: "64MiB"
+          sql.distsql.temp_storage.workmem: "1GiB"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: mib_first_run
+
+    - name: Display MiB first run result
+      ansible.builtin.debug:
+        var: mib_first_run.debug.comparison_values
+        verbosity: 0
+
+    - name: Set MiB parameter - second run (should be idempotent)
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          kv.snapshot_rebalance.max_rate: "64MiB"
+          sql.distsql.temp_storage.workmem: "1GiB"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: mib_second_run
+
+    - name: Display MiB second run result
+      ansible.builtin.debug:
+        var: mib_second_run
+        verbosity: 0
+
+    - name: Verify MiB parameter idempotency
+      ansible.builtin.assert:
+        that:
+          - not mib_second_run.changed
+          - mib_second_run.parameters|length == 0
+        fail_msg: "The MiB parameter is not idempotent. It reported changes on the second run with identical parameters."
+
+    - name: Test minutes duration
+      block:
+        - name: Set minutes parameter - first run
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "5m"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+          register: first_run
+
+        - name: Set minutes parameter - second run (should be idempotent)
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "5m"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+          register: second_run
+
+        - name: Verify minutes idempotency
+          ansible.builtin.assert:
+            that:
+              - not second_run.changed
+              - second_run.parameters|length == 0
+            fail_msg: "Minutes duration is not idempotent"
+
+    - name: Test seconds duration
+      block:
+        - name: Set seconds parameter - first run
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "300s"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+          register: first_run
+
+        - name: Display first run result
+          ansible.builtin.debug:
+            var: first_run.debug.comparison_values
+
+        - name: Set seconds parameter - second run (should be idempotent)
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "300s"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+          register: second_run
+
+        - name: Verify seconds idempotency
+          ansible.builtin.assert:
+            that:
+              - not second_run.changed
+              - second_run.parameters|length == 0
+            fail_msg: "Seconds duration is not idempotent"
+
+    - name: Test milliseconds duration
+      block:
+        - name: Set milliseconds parameter - first run
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "300000ms"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+          register: first_run
+
+        - name: Display first run result
+          ansible.builtin.debug:
+            var: first_run.debug.comparison_values
+
+        - name: Set milliseconds parameter - second run (should be idempotent)
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "300000ms"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+          register: second_run
+
+        - name: Verify milliseconds idempotency
+          ansible.builtin.assert:
+            that:
+              - not second_run.changed
+              - second_run.parameters|length == 0
+            fail_msg: "Milliseconds duration is not idempotent"
+
+    - name: Test hours duration
+      block:
+        - name: Set hours parameter - first run
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "0.0833h"  # ~5 minutes
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+          register: first_run
+
+        - name: Display first run result
+          ansible.builtin.debug:
+            var: first_run.debug.comparison_values
+
+        - name: Set hours parameter - second run (should be idempotent)
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "0.0833h"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+          register: second_run
+
+        - name: Verify hours idempotency
+          ansible.builtin.assert:
+            that:
+              - not second_run.changed
+              - second_run.parameters|length == 0
+            fail_msg: "Hours duration is not idempotent"

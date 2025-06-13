@@ -1,0 +1,99 @@
+---
+# Example playbook for managing CockroachDB backups and restores
+- name: Manage CockroachDB backups and restores
+  hosts: cockroachdb_servers
+  gather_facts: true
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+    backup_passphrase: "{{ vault_backup_passphrase }}"
+    backup_bucket: "s3://my-company-backups/cockroachdb"
+    timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+
+  tasks:
+    # Create full backup of the production database
+    - name: Create full backup of production database
+      cockroachdb_backup:
+        operation: backup
+        database: production
+        uri: "{{ backup_bucket }}/full/{{ timestamp }}/"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+        options:
+          encryption_passphrase: "{{ backup_passphrase }}"
+      register: backup_result
+
+    - name: Display backup result
+      ansible.builtin.debug:
+        msg: "Backup completed to {{ backup_result.uri }}"
+      when: backup_result.changed
+
+    # Create incremental backup
+    - name: Create incremental backup of production database
+      cockroachdb_backup:
+        operation: backup
+        database: production
+        uri: "{{ backup_bucket }}/incremental/{{ timestamp }}/"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+        options:
+          incremental_from:
+            - "{{ backup_bucket }}/full/{{ latest_full_backup }}/"
+          encryption_passphrase: "{{ backup_passphrase }}"
+          detached: true
+      register: incremental_backup
+      vars:
+        latest_full_backup: "20250601000000"  # This would normally be determined dynamically
+
+    # List backups
+    - name: List available backups
+      cockroachdb_backup:
+        operation: list
+        uri: "{{ backup_bucket }}/"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: backup_list
+
+    - name: Display available backups
+      ansible.builtin.debug:
+        var: backup_list.backups
+
+    # Restore database (normally only run when needed)
+    - name: Restore database from backup
+      cockroachdb_backup:
+        operation: restore
+        database: production_restored
+        uri: "{{ backup_bucket }}/full/{{ latest_backup }}/"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+        options:
+          encryption_passphrase: "{{ backup_passphrase }}"
+      register: restore_result
+      vars:
+        latest_backup: "20250601000000"  # This would normally be determined dynamically
+      when: run_restore | default(false)
+
+    - name: Display restore result
+      ansible.builtin.debug:
+        msg: "Restore completed for database {{ restore_result.database }}"
+      when: restore_result.changed | default(false)

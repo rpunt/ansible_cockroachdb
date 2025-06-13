@@ -1,0 +1,139 @@
+---
+#
+# Idempotency Test - GC Operation
+#
+- name: Set GC TTL for test table (first run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: gc
+    database: "{{ test_db }}"
+    table: "{{ test_table }}"
+    ttl: "1h"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: gc_result_1
+
+- name: Display GC result
+  ansible.builtin.debug:
+    var: gc_result_1
+
+- name: Set same GC TTL for test table (second run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: gc
+    database: "{{ test_db }}"
+    table: "{{ test_table }}"
+    ttl: "1h"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: gc_result_2
+
+- name: Display GC result (second run)
+  ansible.builtin.debug:
+    var: gc_result_2
+
+- name: Verify idempotency for GC operation
+  ansible.builtin.assert:
+    that:
+      - not gc_result_2 is changed
+    fail_msg: "GC operation is not idempotent"
+
+#
+# Idempotency Test - Compact Operation
+#
+- name: Add some data to the table for compaction
+  cockroach_labs.cockroachdb.cockroachdb_query:
+    database: "{{ test_db }}"
+    query: >
+      INSERT INTO {{ test_table }} (id, name, email)
+      SELECT gen_random_uuid(), 'User-' || i, 'user' || i || '@example.com'
+      FROM generate_series(1, 1000) AS i
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+
+- name: Compact test table (first run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: compact
+    database: "{{ test_db }}"
+    table: "{{ test_table }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: compact_result_1
+  ignore_errors: true  # Some versions of CockroachDB don't support COMPACT
+
+- name: Display compact result
+  ansible.builtin.debug:
+    var: compact_result_1
+
+- name: Compact test table (second run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: compact
+    database: "{{ test_db }}"
+    table: "{{ test_table }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: compact_result_2
+  ignore_errors: true  # Some versions of CockroachDB don't support COMPACT
+
+- name: Display compact result (second run)
+  ansible.builtin.debug:
+    var: compact_result_2
+
+- name: Verify idempotency for compact operation
+  ansible.builtin.assert:
+    that:
+      - not compact_result_2 is changed or compact_result_2 is failed
+    fail_msg: "Compact operation is not idempotent"
+  when: not compact_result_1 is failed
+
+#
+# Idempotency Test - Cancel Query Operation
+# Note: This test only verifies the logic, as we can't guarantee having running queries to cancel
+#
+- name: Create a dummy query ID for testing
+  ansible.builtin.set_fact:
+    dummy_query_id: "00000000-0000-0000-0000-000000000000"
+
+- name: Cancel query (first run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: cancel_query
+    query_id: "{{ dummy_query_id }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: cancel_query_result_1
+  ignore_errors: true
+
+- name: Display cancel query result
+  ansible.builtin.debug:
+    var: cancel_query_result_1
+
+- name: Cancel query (second run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: cancel_query
+    query_id: "{{ dummy_query_id }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: cancel_query_result_2
+  ignore_errors: true
+
+- name: Display cancel query result (second run)
+  ansible.builtin.debug:
+    var: cancel_query_result_2
+
+- name: Verify idempotency for cancel query operation
+  ansible.builtin.assert:
+    that:
+      - not cancel_query_result_2 is changed or cancel_query_result_2 is failed
+    fail_msg: "Cancel query operation is not idempotent"

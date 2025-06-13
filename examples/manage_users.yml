@@ -1,0 +1,62 @@
+---
+# Example playbook for managing CockroachDB users and permissions
+- name: Manage CockroachDB users
+  hosts: cockroachdb_servers
+  gather_facts: false
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_admin_user: "root"
+
+  tasks:
+    - name: Create application user with full access to the production database
+      cockroachdb_user:
+        name: app_user
+        password: "{{ app_user_password }}"
+        state: present
+        priv: "production:ALL"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        login_user: "{{ cockroach_admin_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create read-only user
+      cockroachdb_user:
+        name: readonly_user
+        password: "{{ readonly_user_password }}"
+        state: present
+        priv: "production:SELECT"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        login_user: "{{ cockroach_admin_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create admin role (without login capability)
+      cockroachdb_user:
+        name: admin_role
+        state: present
+        login: false
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        login_user: "{{ cockroach_admin_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Remove old user
+      cockroachdb_user:
+        name: old_user
+        state: absent
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        login_user: "{{ cockroach_admin_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"

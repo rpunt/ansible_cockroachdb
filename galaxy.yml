@@ -1,0 +1,19 @@
+namespace: cockroach_labs
+name: cockroachdb
+version: 1.0.0
+readme: README.md
+authors:
+  - Ryan Punt @rpunt
+description: Ansible collection for managing CockroachDB
+license:
+  - Apache-2.0
+license_file: LICENSE
+tags:
+  - database
+  - cockroachdb
+  - sql
+dependencies: {}
+repository: https://github.com/yourusername/ansible-cockroachdb
+documentation: https://github.com/yourusername/ansible-cockroachdb/blob/main/README.md
+homepage: https://github.com/yourusername/ansible-cockroachdb
+issues: https://github.com/yourusername/ansible-cockroachdb/issues

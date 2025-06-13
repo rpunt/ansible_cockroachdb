@@ -1,0 +1,42 @@
+---
+#
+# Idempotency Test - Node Decommission Operation
+# Note: This is a simulated test as we can't actually decommission nodes in the test environment
+#
+
+- name: Simulate decommission on non-existent node (first run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: node_decommission
+    node_id: 999  # Non-existent node
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: node_decom_result_1
+  ignore_errors: true
+
+- name: Display node decommission result
+  ansible.builtin.debug:
+    var: node_decom_result_1
+
+- name: Simulate decommission on non-existent node (second run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: node_decommission
+    node_id: 999  # Non-existent node
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: node_decom_result_2
+  ignore_errors: true
+
+- name: Display node decommission result (second run)
+  ansible.builtin.debug:
+    var: node_decom_result_2
+
+- name: Verify idempotency for node decommission operation
+  ansible.builtin.assert:
+    that:
+      - not node_decom_result_1 is changed or node_decom_result_1 is failed
+      - not node_decom_result_2 is changed or node_decom_result_2 is failed
+    fail_msg: "Node decommission operation is not idempotent"

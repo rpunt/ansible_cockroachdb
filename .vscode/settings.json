@@ -1,0 +1,47 @@
+{
+  "editor.rulers": [
+    80,
+    160
+  ],
+  "python.testing.pytestArgs": [
+    "tests/unit",
+    "-vv"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/../../../",
+  ],
+  "python.formatting.provider": "black",
+  "python.formatting.blackArgs": [
+    "--line-length",
+    "160"
+  ],
+  "[python]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
+  "markdownlint.config": {
+    "default": true,
+    "line-length": false,
+    "no-inline-html": false,
+    "first-line-h1": false,
+    "no-duplicate-header": {
+      "allow_different_nesting": true
+    },
+    "code-block-style": true
+  },
+  "markdownlint.ignore": [
+    "LICENSE",
+    "*.py",
+    "*.yml",
+    "*.yaml",
+    "*.ini",
+    "*.cfg",
+    "*.sh",
+    "node_modules/",
+    "__pycache__/",
+    "*.tar.gz"
+  ],
+  "ansible.python.interpreterPath": "/Users/ryan/.asdf/shims/python3.12"
+}

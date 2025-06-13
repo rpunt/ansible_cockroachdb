@@ -1,0 +1,44 @@
+---
+#
+# Idempotency Test - Cancel Jobs Operation
+#
+- name: Create a dummy job ID for testing
+  ansible.builtin.set_fact:
+    dummy_job_id: 99999999  # Non-existent job ID
+
+- name: Cancel job (first run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: cancel_jobs
+    job_id: "{{ dummy_job_id }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: cancel_job_result_1
+  ignore_errors: true
+
+- name: Display cancel job result
+  ansible.builtin.debug:
+    var: cancel_job_result_1
+
+- name: Cancel job (second run)
+  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+    operation: cancel_jobs
+    job_id: "{{ dummy_job_id }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: cancel_job_result_2
+  ignore_errors: true
+
+- name: Display cancel job result (second run)
+  ansible.builtin.debug:
+    var: cancel_job_result_2
+
+- name: Verify idempotency for cancel job operation
+  ansible.builtin.assert:
+    that:
+      - not cancel_job_result_1 is changed or cancel_job_result_1 is failed
+      - not cancel_job_result_2 is changed or cancel_job_result_2 is failed
+    fail_msg: "Cancel job operation is not idempotent"

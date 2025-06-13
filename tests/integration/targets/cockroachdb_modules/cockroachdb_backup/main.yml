@@ -1,0 +1,21 @@
+---
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+    test_db: cockroachdb_backup_db
+    test_table: cockroachdb_backup_table
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml
+
+- name: Setup
+  ansible.builtin.import_tasks: setup.yml
+
+- name: Test idempotency
+  ansible.builtin.import_tasks: idempotency.yml
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml

@@ -1,0 +1,182 @@
+---
+#
+# Idempotency Test - All Columns
+#
+- name: Create statistics for all columns (first run)
+  cockroachdb_statistics:
+    database: "{{ test_db }}"
+    table: "{{ test_table }}"
+    operation: create
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: create_stats_result_1
+
+- name: Display create stats result
+  ansible.builtin.debug:
+    var: create_stats_result_1
+
+- name: Create statistics for all columns (second run)
+  cockroach_labs.cockroachdb.cockroachdb_statistics:
+    database: "{{ test_db }}"
+    table: "{{ test_table }}"
+    operation: create
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: create_stats_result_2
+
+- name: Display create stats result (second run)
+  ansible.builtin.debug:
+    var: create_stats_result_2
+
+- name: Verify idempotency for creating all-column statistics
+  ansible.builtin.assert:
+    that:
+      - create_stats_result_1 is changed
+      - not create_stats_result_2 is changed
+    fail_msg: "Statistics creation is not idempotent for all columns"
+
+#
+# Idempotency Test - Specific Columns
+#
+# We'll directly use a second test table to avoid cleanup issues
+- name: Create a second test table for specific columns test
+  cockroach_labs.cockroachdb.cockroachdb_table:
+    name: "{{ test_table }}_2"
+    database: "{{ test_db }}"
+    state: present
+    columns:
+      - name: id
+        type: UUID
+        primary_key: true
+        default: gen_random_uuid()
+      - name: name
+        type: STRING
+      - name: email
+        type: STRING
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: root
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+
+- name: Create statistics for specific columns (first run)
+  cockroach_labs.cockroachdb.cockroachdb_statistics:
+    database: "{{ test_db }}"
+    table: "{{ test_table }}_2"
+    columns:
+      - name
+      - email
+    operation: create
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: create_cols_stats_result_1
+
+- name: Display create specific column stats result
+  ansible.builtin.debug:
+    var: create_cols_stats_result_1
+
+- name: Create statistics for specific columns (second run)
+  cockroach_labs.cockroachdb.cockroachdb_statistics:
+    database: "{{ test_db }}"
+    table: "{{ test_table }}_2"
+    columns:
+      - name
+      - email
+    operation: create
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: create_cols_stats_result_2
+
+- name: Display create specific column stats result (second run)
+  ansible.builtin.debug:
+    var: create_cols_stats_result_2
+
+- name: Verify idempotency for creating specific column statistics
+  ansible.builtin.assert:
+    that:
+      - create_cols_stats_result_1 is changed
+      - not create_cols_stats_result_2 is changed
+    fail_msg: "Statistics creation is not idempotent for specific columns"
+
+#
+# Idempotency Test - Delete Operation
+#
+- name: Create a third test table for delete statistics test
+  cockroach_labs.cockroachdb.cockroachdb_table:
+    name: "{{ test_table }}_3"
+    database: "{{ test_db }}"
+    state: present
+    columns:
+      - name: id
+        type: UUID
+        primary_key: true
+        default: gen_random_uuid()
+      - name: name
+        type: STRING
+      - name: email
+        type: STRING
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: root
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+
+- name: Create statistics on the third test table
+  cockroach_labs.cockroachdb.cockroachdb_statistics:
+    database: "{{ test_db }}"
+    table: "{{ test_table }}_3"
+    operation: create
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: create_stats_third_table
+
+- name: Delete statistics for the third table (first run)
+  cockroach_labs.cockroachdb.cockroachdb_statistics:
+    database: "{{ test_db }}"
+    table: "{{ test_table }}_3"
+    operation: delete
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: delete_stats_result_1
+
+- name: Display delete stats result
+  ansible.builtin.debug:
+    var: delete_stats_result_1
+
+- name: Delete statistics for the third table (second run)
+  cockroach_labs.cockroachdb.cockroachdb_statistics:
+    database: "{{ test_db }}"
+    table: "{{ test_table }}_3"
+    operation: delete
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: delete_stats_result_2
+
+- name: Display delete stats result (second run)
+  ansible.builtin.debug:
+    var: delete_stats_result_2
+
+- name: Verify idempotency for deleting statistics
+  ansible.builtin.assert:
+    that:
+      - delete_stats_result_1 is changed
+      - not delete_stats_result_2 is changed
+    fail_msg: "Statistics deletion is not idempotent"
+
+# Let's skip the configuration testing for now as it requires additional work
+# to be compatible with the CockroachDB version being used in tests
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml

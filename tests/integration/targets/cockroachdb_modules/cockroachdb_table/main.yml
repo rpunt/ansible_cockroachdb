@@ -1,0 +1,43 @@
+---
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+    test_db: cockroachdb_table_db
+    test_user: cockroachdb_table_user
+
+- name: Cleanup test objects
+  ansible.builtin.import_tasks: cleanup.yml
+
+- name: Create a test table
+  cockroach_labs.cockroachdb.cockroachdb_table:
+    name: "{{ test_table }}"
+    database: "{{ test_db }}"
+    state: present
+    columns:
+      - name: id
+        type: UUID
+        primary_key: true
+        default: gen_random_uuid()
+      - name: name
+        type: STRING
+      - name: email
+        type: STRING
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable
+  register: table_result
+
+- name: Verify table creation
+  ansible.builtin.assert:
+    that:
+      - table_result is changed
+
+- name: Run idempotency tests
+  ansible.builtin.import_tasks: idempotency.yml
+
+- name: Cleanup test objects
+  ansible.builtin.import_tasks: cleanup.yml

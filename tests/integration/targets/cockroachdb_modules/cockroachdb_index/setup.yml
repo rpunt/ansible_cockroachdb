@@ -1,0 +1,29 @@
+---
+# Setup phase - create test database
+- name: Create test database for privilege testing
+  cockroach_labs.cockroachdb.cockroachdb_db:
+    name: "{{ test_db }}"
+    state: present
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: root
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+
+- name: Create a test table
+  cockroach_labs.cockroachdb.cockroachdb_table:
+    name: "{{ test_table }}"
+    database: "{{ test_db }}"
+    state: present
+    columns:
+      - name: id
+        type: UUID
+        primary_key: true
+        default: gen_random_uuid()
+      - name: name
+        type: STRING
+      - name: email
+        type: STRING
+    host: localhost
+    port: 26257
+    user: root
+    ssl_mode: disable

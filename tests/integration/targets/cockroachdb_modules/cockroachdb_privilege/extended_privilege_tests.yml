@@ -1,0 +1,254 @@
+---
+# Extended privilege tests to verify idempotency for different privilege types
+
+- name: Set CockroachDB connection variables
+  ansible.builtin.set_fact:
+    cockroach_host: localhost
+    cockroach_port: 26257
+    cockroach_user: root
+    cockroach_ssl_mode: disable
+
+# Create a test table for more specific privilege testing
+- name: Create a test table for privilege testing
+  cockroachdb_query:
+    query: >
+      CREATE TABLE IF NOT EXISTS {{ test_db }}.public.test_privileges
+      (id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+       username STRING,
+       email STRING,
+       created_at TIMESTAMP DEFAULT now(),
+       score INT)
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: table_result
+
+- name: Test 1 - Grant specific privileges and verify idempotency
+  block:
+    - name: Grant SELECT and INSERT privileges to test user
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - SELECT
+          - INSERT
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: specific_priv_result
+
+    - name: Verify specific privileges were granted
+      ansible.builtin.assert:
+        that:
+          - specific_priv_result is changed
+        fail_msg: "Failed to grant specific privileges"
+
+    - name: Run the same specific privilege grant again (idempotency check)
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - SELECT
+          - INSERT
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: specific_priv_idempotent_result
+
+    - name: Verify specific privilege idempotency
+      ansible.builtin.assert:
+        that:
+          - specific_priv_idempotent_result is not changed
+        fail_msg: "Specific privilege idempotency check failed"
+
+- name: Test 2 - Column-level privileges and verify idempotency
+  block:
+    - name: Grant column-level UPDATE privilege
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - "UPDATE(username, email)"
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: column_priv_result
+
+    - name: Verify column privileges were granted
+      ansible.builtin.assert:
+        that:
+          - column_priv_result is changed
+        fail_msg: "Failed to grant column-level privileges"
+
+    - name: Run the same column-level grant again (idempotency check)
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - "UPDATE(username, email)"
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: column_priv_idempotent_result
+
+    - name: Verify column privilege idempotency
+      ansible.builtin.assert:
+        that:
+          - column_priv_idempotent_result is not changed
+        fail_msg: "Column-level privilege idempotency check failed"
+
+- name: Test 3 - Grant with grant option and verify idempotency
+  block:
+    - name: Grant privileges with grant option
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - SELECT
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        with_grant_option: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: grant_option_result
+
+    - name: Verify privileges with grant option were granted
+      ansible.builtin.assert:
+        that:
+          - grant_option_result is changed
+        fail_msg: "Failed to grant privileges with grant option"
+
+    - name: Run the same grant with grant option again (idempotency check)
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - SELECT
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        with_grant_option: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: grant_option_idempotent_result
+
+    - name: Verify grant option idempotency
+      ansible.builtin.assert:
+        that:
+          - grant_option_idempotent_result is not changed
+        fail_msg: "Grant option idempotency check failed"
+
+- name: Test 4 - Additional privileges and verify idempotency
+  block:
+    - name: Grant DELETE privilege
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - DELETE
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: delete_priv_result
+
+    - name: Verify DELETE privilege was granted
+      ansible.builtin.assert:
+        that:
+          - delete_priv_result is changed
+        fail_msg: "Failed to grant DELETE privilege"
+
+    - name: Run the DELETE privilege grant again (idempotency check)
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - DELETE
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: delete_priv_idempotent_result
+
+    - name: Verify DELETE privilege idempotency
+      ansible.builtin.assert:
+        that:
+          - delete_priv_idempotent_result is not changed
+        fail_msg: "DELETE privilege idempotency check failed"
+
+    - name: Grant ALL privilege to see if it's idempotent with individual privileges
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - ALL
+        on_type: table
+        object_name: test_privileges
+        schema: public
+        database: "{{ test_db }}"
+        roles:
+          - "{{ test_user }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode }}"
+      register: all_after_individual_result
+
+    - name: Display ALL privilege grant result
+      ansible.builtin.debug:
+        var: all_after_individual_result
+
+    # This test might show changed=true because ALL might include more privileges than already granted
+    # We'll still show the result to understand the behavior
+
+- name: Clean up test table
+  cockroachdb_query:
+    query: "DROP TABLE IF EXISTS {{ test_db }}.public.test_privileges"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: cleanup_result

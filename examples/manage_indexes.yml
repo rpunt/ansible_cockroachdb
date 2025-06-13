@@ -1,0 +1,127 @@
+---
+# Example playbook for managing CockroachDB indexes
+- name: Manage CockroachDB indexes
+  hosts: cockroachdb_servers
+  gather_facts: false
+  vars:
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    cockroach_host: "localhost"
+    cockroach_port: 26257
+    cockroach_user: "root"
+
+  tasks:
+    - name: Create basic index on users table
+      cockroachdb_index:
+        name: idx_users_email
+        database: production
+        table: users
+        columns:
+          - email
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: users_email_index
+
+    - name: Display index creation results
+      ansible.builtin.debug:
+        var: users_email_index
+
+    - name: Create unique composite index on users table
+      cockroachdb_index:
+        name: idx_users_region_username
+        database: production
+        table: users
+        columns:
+          - region
+          - username
+        unique: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: users_unique_index
+
+    - name: Create index on orders table with stored columns
+      cockroachdb_index:
+        name: idx_orders_customer
+        database: production
+        table: orders
+        columns:
+          - customer_id
+        storing:
+          - order_date
+          - total_amount
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create expression index on products table
+      cockroachdb_index:
+        name: idx_products_lower_name
+        database: production
+        table: products
+        expressions:
+          - "lower(name)"
+        if_not_exists: true
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create partial index on orders table
+      cockroachdb_index:
+        name: idx_high_value_orders
+        database: production
+        table: orders
+        columns:
+          - customer_id
+          - order_date
+        where: "total_amount > 1000"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Get table and index information
+      cockroachdb_info:
+        type: indexes
+        database: production
+        table: users
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: index_info
+
+    - name: Display index information
+      ansible.builtin.debug:
+        var: index_info
+
+    - name: Drop an index
+      cockroachdb_index:
+        name: idx_users_email
+        database: production
+        table: users
+        state: absent
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"

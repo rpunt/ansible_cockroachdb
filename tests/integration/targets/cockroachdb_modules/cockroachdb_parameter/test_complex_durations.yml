@@ -1,0 +1,86 @@
+---
+# Test CockroachDB parameter module with complex durations
+- name: Test complex duration formats
+  block:
+    - name: Set complex duration parameter - first run
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          server.time_until_store_dead: "1h30m"  # 1 hour and 30 minutes = 5400 seconds
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: first_run
+
+    - name: Display first run result
+      ansible.builtin.debug:
+        var: first_run.debug.comparison_values
+        verbosity: 0
+
+    - name: Set complex duration parameter - second run (should be idempotent)
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          server.time_until_store_dead: "1h30m"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: second_run
+
+    - name: Verify complex duration idempotency
+      ansible.builtin.assert:
+        that:
+          - not second_run.changed
+          - second_run.parameters|length == 0
+        fail_msg: "Complex duration is not idempotent"
+
+    - name: Test equivalent duration in different formats - seconds
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          server.time_until_store_dead: "5400s"  # Same as 1h30m
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: seconds_run
+
+    - name: Verify equivalent seconds format is idempotent
+      ansible.builtin.assert:
+        that:
+          - not seconds_run.changed
+          - seconds_run.parameters|length == 0
+        fail_msg: "Equivalent seconds format is not idempotent"
+
+    - name: Test equivalent duration in different formats - minutes
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          server.time_until_store_dead: "90m"  # Same as 1h30m
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: minutes_run
+
+    - name: Verify equivalent minutes format is idempotent
+      ansible.builtin.assert:
+        that:
+          - not minutes_run.changed
+          - minutes_run.parameters|length == 0
+        fail_msg: "Equivalent minutes format is not idempotent"
+
+    - name: Test equivalent duration in different formats - compound
+      cockroach_labs.cockroachdb.cockroachdb_parameter:
+        parameters:
+          server.time_until_store_dead: "1h29m60s"  # Also equals 1h30m
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+      register: compound_run
+
+    - name: Verify equivalent compound format is idempotent
+      ansible.builtin.assert:
+        that:
+          - not compound_run.changed
+          - compound_run.parameters|length == 0
+        fail_msg: "Equivalent compound format is not idempotent"

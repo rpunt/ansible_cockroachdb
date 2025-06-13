@@ -1,0 +1,119 @@
+---
+# Test CockroachDB parameter module with all parameter types
+- name: Test different parameter types
+  block:
+    - name: Test string parameter
+      block:
+        - name: Set string parameter
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              server.time_until_store_dead: "15m"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+            # Add --insecure flag equivalent
+            ssl_cert: null
+            ssl_key: null
+            ssl_rootcert: null
+          register: string_result
+
+        - name: Verify string parameter
+          ansible.builtin.assert:
+            that:
+              - string_result is changed
+
+    - name: Test integer parameter
+      block:
+        - name: Set integer parameter
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              sql.defaults.distsql: 1
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+            # Add --insecure flag equivalent
+            ssl_cert: null
+            ssl_key: null
+            ssl_rootcert: null
+          register: int_result
+
+        - name: Verify integer parameter
+          ansible.builtin.assert:
+            that:
+              - int_result is changed
+
+    - name: Test float parameter
+      block:
+        # First reset to default value to ensure a change will happen
+        - name: Reset float parameter to default
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              sql.stats.automatic_collection.fraction_stale_rows: null
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+            # Add --insecure flag equivalent
+            ssl_cert: null
+            ssl_key: null
+            ssl_rootcert: null
+
+        - name: Set float parameter
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              sql.stats.automatic_collection.fraction_stale_rows: 0.35
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+            # Add --insecure flag equivalent
+            ssl_cert: null
+            ssl_key: null
+            ssl_rootcert: null
+          register: float_result
+
+        - name: Verify float parameter
+          ansible.builtin.assert:
+            that:
+              - float_result is changed
+
+    - name: Test boolean parameter
+      block:
+        # First reset to default value to ensure a change will happen
+        - name: Reset boolean parameter to default
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              kv.rangefeed.enabled: null
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+            # Add --insecure flag equivalent
+            ssl_cert: null
+            ssl_key: null
+            ssl_rootcert: null
+
+        - name: Set boolean parameter
+          cockroach_labs.cockroachdb.cockroachdb_parameter:
+            parameters:
+              kv.rangefeed.enabled: true
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_mode: "{{ cockroach_ssl_mode | default('disable') }}"
+            # Add --insecure flag equivalent
+            ssl_cert: null
+            ssl_key: null
+            ssl_rootcert: null
+          register: bool_result
+
+        - name: Verify boolean parameter
+          ansible.builtin.assert:
+            that:
+              - bool_result is changed
+
+    - name: Test duration parameter (already covered in test_duration_idempotency.yml)
+      ansible.builtin.debug:
+        msg: "Duration parameter types are tested in test_duration_idempotency.yml"

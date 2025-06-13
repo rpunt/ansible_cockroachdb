@@ -1,0 +1,369 @@
+---
+# Complete example playbook that creates a database, users, and tables
+- name: Complete CockroachDB Setup
+  hosts: cockroachdb_servers
+  gather_facts: no
+  vars:
+    cockroach_host: "{{ ansible_host }}"
+    cockroach_port: 26257
+    cockroach_user: "root"
+    cockroach_ssl_cert: "/path/to/client.crt"
+    cockroach_ssl_key: "/path/to/client.key"
+    cockroach_ssl_rootcert: "/path/to/ca.crt"
+    app_database: "myapp"
+    app_user_password: "secure_app_password"  # Use ansible-vault for this in production
+    readonly_user_password: "secure_readonly_password"  # Use ansible-vault for this in production
+
+  tasks:
+    - name: Verify CockroachDB connection
+      cockroachdb_info:
+        gather_subset: ['cluster']
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: crdb_info
+
+    - name: Display CockroachDB version
+      debug:
+        msg: "Connected to CockroachDB v{{ crdb_info.cluster.version }}"
+
+    - name: Apply optimization profile for OLTP workload
+      cockroachdb_parameter:
+        profile: oltp
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: parameter_result
+
+    - name: Display parameter optimization results
+      debug:
+        var: parameter_result.parameters
+
+    - name: Create application database
+      cockroachdb_db:
+        name: "{{ app_database }}"
+        state: present
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create application user with full access
+      cockroachdb_user:
+        name: app_user
+        password: "{{ app_user_password }}"
+        state: present
+        priv: "{{ app_database }}:ALL"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        login_user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create readonly user
+      cockroachdb_user:
+        name: readonly_user
+        password: "{{ readonly_user_password }}"
+        state: present
+        priv: "{{ app_database }}:SELECT"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        login_user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create users table
+      cockroachdb_table:
+        name: users
+        database: "{{ app_database }}"
+        state: present
+        columns:
+          - name: id
+            type: UUID
+            primary_key: true
+            nullable: false
+            default: "gen_random_uuid()"
+          - name: username
+            type: STRING
+            nullable: false
+          - name: email
+            type: STRING
+            nullable: false
+          - name: password_hash
+            type: STRING
+            nullable: false
+          - name: created_at
+            type: TIMESTAMP
+            default: "now()"
+          - name: updated_at
+            type: TIMESTAMP
+            default: "now()"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create products table
+      cockroachdb_table:
+        name: products
+        database: "{{ app_database }}"
+        state: present
+        columns:
+          - name: id
+            type: UUID
+            primary_key: true
+            nullable: false
+            default: "gen_random_uuid()"
+          - name: name
+            type: STRING
+            nullable: false
+          - name: description
+            type: TEXT
+          - name: price
+            type: DECIMAL
+            nullable: false
+          - name: created_at
+            type: TIMESTAMP
+            default: "now()"
+          - name: updated_at
+            type: TIMESTAMP
+            default: "now()"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create orders table with foreign keys
+      cockroachdb_table:
+        name: orders
+        database: "{{ app_database }}"
+        state: present
+        columns:
+          - name: id
+            type: UUID
+            primary_key: true
+            nullable: false
+            default: "gen_random_uuid()"
+          - name: user_id
+            type: UUID
+            nullable: false
+          - name: total_amount
+            type: DECIMAL
+            nullable: false
+          - name: status
+            type: STRING
+            nullable: false
+            default: "'pending'"
+          - name: created_at
+            type: TIMESTAMP
+            default: "now()"
+          - name: updated_at
+            type: TIMESTAMP
+            default: "now()"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    # Execute raw SQL to add foreign keys (not directly supported by the module yet)
+    - name: Add foreign key constraints
+      cockroachdb_db:
+        database: "{{ app_database }}"
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+        query: |
+          ALTER TABLE orders ADD CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+          CREATE TABLE order_items (
+            order_id UUID REFERENCES orders(id),
+            product_id UUID REFERENCES products(id),
+            quantity INT NOT NULL,
+            price DECIMAL NOT NULL,
+            PRIMARY KEY (order_id, product_id)
+          )
+      register: query_result
+
+    - name: Create indexes for better query performance
+      block:
+        - name: Create unique index on users table for username
+          cockroachdb_index:
+            name: idx_users_username
+            database: "{{ app_database }}"
+            table: users
+            columns:
+              - username
+            unique: true
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_cert: "{{ cockroach_ssl_cert }}"
+            ssl_key: "{{ cockroach_ssl_key }}"
+            ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+        - name: Create index on users table for email
+          cockroachdb_index:
+            name: idx_users_email
+            database: "{{ app_database }}"
+            table: users
+            columns:
+              - email
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_cert: "{{ cockroach_ssl_cert }}"
+            ssl_key: "{{ cockroach_ssl_key }}"
+            ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+        - name: Create search index on products with storing columns
+          cockroachdb_index:
+            name: idx_products_name
+            database: "{{ app_database }}"
+            table: products
+            columns:
+              - name
+            storing:
+              - price
+              - stock
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_cert: "{{ cockroach_ssl_cert }}"
+            ssl_key: "{{ cockroach_ssl_key }}"
+            ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+        - name: Create partial index on orders for high-value orders
+          cockroachdb_index:
+            name: idx_orders_high_value
+            database: "{{ app_database }}"
+            table: orders
+            columns:
+              - user_id
+              - created_at
+            where: "total > 1000"
+            host: "{{ cockroach_host }}"
+            port: "{{ cockroach_port }}"
+            user: "{{ cockroach_user }}"
+            ssl_cert: "{{ cockroach_ssl_cert }}"
+            ssl_key: "{{ cockroach_ssl_key }}"
+            ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Create full database backup
+      cockroachdb_backup:
+        operation: backup
+        database: "{{ app_database }}"
+        uri: 'nodelocal://1/{{ app_database }}_setup_backup/'
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+
+    - name: Display backup result
+      debug:
+        msg: "Database setup complete and backed up to {{ app_database }}_setup_backup/"
+
+    # Add fine-grained privileges with the new privilege module
+    - name: Set up column-level privileges
+      cockroachdb_privilege:
+        state: grant
+        privileges:
+          - "SELECT(id, username, created_at)"
+          - "UPDATE(username, email)"
+        on_type: table
+        object_name: users
+        schema: public
+        database: "{{ app_database }}"
+        roles:
+          - app_user
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: column_privileges
+
+    - name: Display column privilege results
+      debug:
+        var: column_privileges
+
+    # Create statistics for important tables
+    - name: Create statistics for query optimization
+      cockroachdb_statistics:
+        database: "{{ app_database }}"
+        table: "{{ item.table }}"
+        columns: "{{ item.columns }}"
+        operation: create
+        options:
+          histogram_buckets: 200
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      loop:
+        - table: users
+          columns: [id, region, created_at]
+        - table: orders
+          columns: [user_id, created_at, status]
+      register: statistics_results
+
+    - name: Display statistics results
+      debug:
+        var: statistics_results
+
+    # Configure maintenance operations
+    - name: Set custom garbage collection for orders table
+      cockroachdb_maintenance:
+        operation: gc
+        database: "{{ app_database }}"
+        table: orders
+        ttl: "180d"  # Keep orders for 6 months
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: gc_result
+
+    - name: Display maintenance operation results
+      debug:
+        var: gc_result
+
+    # Final check - display node status
+    - name: Check node status
+      cockroachdb_maintenance:
+        operation: node_status
+        host: "{{ cockroach_host }}"
+        port: "{{ cockroach_port }}"
+        user: "{{ cockroach_user }}"
+        ssl_cert: "{{ cockroach_ssl_cert }}"
+        ssl_key: "{{ cockroach_ssl_key }}"
+        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
+      register: node_status
+
+    - name: Display final cluster setup information
+      debug:
+        msg: "Complete setup finished successfully with {{ node_status.nodes | length }} nodes"
