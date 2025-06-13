@@ -7,14 +7,14 @@ This document describes how to test the CockroachDB Ansible collection using var
 - Python 3.6 or higher with pip
 - Ansible 2.9 or higher
 - For containerized testing:
-  - Podman or Docker
-  - podman-compose or docker-compose (for integration tests)
+  - Podman
+  - podman-compose or the included podman-compose-wrapper.sh (for integration tests)
 
 ## Overview of Testing Scripts
 
 The collection includes several scripts to facilitate testing:
 
-1. `run_tests.sh` - Comprehensive script supporting multiple testing environments (local, podman, docker)
+1. `run_tests.sh` - Comprehensive script supporting multiple testing environments (local, podman)
 2. `test_with_podman.sh` - Script for running tests specifically in Podman containers
 3. `test_local.sh` - Script for quick testing of individual modules locally
 4. `test_module.sh` - Script for testing specific modules
@@ -41,8 +41,8 @@ The `run_tests.sh` script supports multiple testing environments and configurati
 # Run sanity tests in a Podman container
 ./run_tests.sh --mode podman --type sanity
 
-# Run integration tests in Docker with containerized CockroachDB
-./run_tests.sh --mode docker --type integration --container
+# Run integration tests in Podman with containerized CockroachDB
+./run_tests.sh --mode podman --type integration --container
 
 # Get help on all options
 ./run_tests.sh --help
@@ -50,7 +50,7 @@ The `run_tests.sh` script supports multiple testing environments and configurati
 
 ### Command-line Options for run_tests.sh
 
-- `--mode, -m MODE`: Test mode (local, podman, docker)
+- `--mode, -m MODE`: Test mode (local, podman)
 - `--type, -t TYPE`: Test type (all, sanity, unit, integration)
 - `--file, -f FILE`: Test file (consolidated_tests.yml, integration_tests.yml, comprehensive_tests.yml, simplified_tests.yml)
 - `--test-mode, -d MODE`: Test depth mode (basic, standard, comprehensive)
@@ -94,7 +94,7 @@ If you prefer to use Podman containers for testing:
 
 Integration tests require a running CockroachDB instance. The script will:
 
-1. Start a CockroachDB container using the configuration in `tests/integration/docker-compose.yml`
+1. Start a CockroachDB container using the configuration in `tests/integration/docker-compose.yml` with Podman
 2. Run the integration tests
 3. Stop the CockroachDB container when tests are complete
 
@@ -218,7 +218,7 @@ If you encounter issues with the tests, try these steps:
    pip install ansible ansible-core psycopg2-binary
    ```
 
-2. For container-based tests, check that Podman/Docker is properly installed
+2. For container-based tests, check that Podman is properly installed
 
 3. For integration tests, make sure port 26257 is available
 

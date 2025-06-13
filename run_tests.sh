@@ -1,6 +1,6 @@
 #!/bin/bash
 # Comprehensive test script for CockroachDB Ansible collection
-# This script can run tests in various modes with or without containers
+# This script can run tests in local or Podman modes with or without containers
 
 set -e
 
@@ -13,7 +13,7 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Default settings
-MODE="local"         # local, podman, docker
+MODE="local"         # local, podman
 TEST_TYPE="all"      # all, sanity, unit, integration
 USE_CONTAINERS=false # use containers for CockroachDB
 VERBOSE=false        # verbose output
@@ -24,16 +24,16 @@ show_help() {
     echo -e "This script runs tests for the CockroachDB Ansible collection in different modes\n"
     echo -e "${BOLD}Usage:${NC} $0 [options]"
     echo -e "\n${BOLD}Options:${NC}"
-    echo -e "  ${GREEN}-m, --mode${NC} MODE       Test mode: local, podman, docker (default: local)"
+    echo -e "  ${GREEN}-m, --mode${NC} MODE       Test mode: local, podman (default: local)"
     echo -e "  ${GREEN}-t, --type${NC} TYPE       Test type: all, sanity, unit, integration (default: all)"
-    echo -e "  ${GREEN}-c, --container${NC}       Use containers for CockroachDB (default: false)"
+    echo -e "  ${GREEN}-c, --container${NC}       Use Podman containers for CockroachDB (default: false)"
     echo -e "  ${GREEN}-v, --verbose${NC}         Enable verbose output"
     echo -e "  ${GREEN}-h, --help${NC}            Show this help message"
     echo -e "\n${BOLD}Examples:${NC}"
     echo -e "  $0 --mode local --type all                          # Run all tests locally"
     echo -e "  $0 --mode podman --type sanity                      # Run sanity tests in podman"
     echo -e "  $0 --mode local --container                         # Run tests locally with containerized CockroachDB"
-    echo -e "  $0 -m docker -t integration -c                      # Run integration tests in docker with containerized CockroachDB"
+    echo -e "  $0 -m podman -t integration -c                      # Run integration tests in podman with containerized CockroachDB"
     echo -e "  $0 -t integration -f consolidated_tests.yml -d basic # Run basic integration tests with consolidated framework"
     echo -e "  $0 -t integration -d comprehensive                  # Run comprehensive tests with consolidated framework"
 }
@@ -71,8 +71,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate options
-if [[ ! "$MODE" =~ ^(local|podman|docker)$ ]]; then
-    echo -e "${RED}Error: Invalid mode '$MODE'. Must be 'local', 'podman', or 'docker'${NC}"
+if [[ ! "$MODE" =~ ^(local|podman)$ ]]; then
+    echo -e "${RED}Error: Invalid mode '$MODE'. Must be 'local' or 'podman'${NC}"
     exit 1
 fi
 
@@ -212,70 +212,14 @@ run_podman_tests() {
     esac
 }
 
-run_docker_tests() {
-    local test_type=$1
 
-    # Check if docker is installed
-    check_command docker
-
-    case "$test_type" in
-        "sanity")
-            echo -e "${GREEN}Running sanity tests in Docker container...${NC}"
-            docker run --rm -v "$(pwd):/collection" \
-                python:3.9-slim \
-                bash -c "cd /collection && \
-                    apt-get update && \
-                    apt-get install -y git && \
-                    pip install -U 'pip' 'wheel' 'ansible' 'ansible-core' 'psycopg2-binary' && \
-                    python -c \"import unittest; unittest.main(module='tests.unit.modules', argv=['first-arg-is-ignored', 'TestCockroachDBModules.test_module_imports', 'TestCockroachDBModules.test_documentation_exists'])\""
-            ;;
-        "unit")
-            echo -e "${GREEN}Running unit tests in Docker container...${NC}"
-            docker run --rm -v "$(pwd):/collection" \
-                python:3.9-slim \
-                bash -c "cd /collection && \
-                    apt-get update && \
-                    apt-get install -y git && \
-                    pip install -U 'pip' 'wheel' 'ansible' 'ansible-core' 'psycopg2-binary' && \
-                    python -m unittest tests/unit/modules.py"
-            ;;
-        "integration")
-            echo -e "${GREEN}Running integration tests in Docker container...${NC}"
-            # Start CockroachDB in Docker container if needed
-            if [ "$USE_CONTAINERS" = true ]; then
-                echo -e "${GREEN}Starting CockroachDB in Docker container...${NC}"
-                docker-compose -f tests/integration/docker-compose.yml up -d
-                trap "docker-compose -f tests/integration/docker-compose.yml down" EXIT
-            fi
-
-            # Run integration tests
-            docker run --rm -v "$(pwd):/collection" \
-                --net=host \
-                python:3.9-slim \
-                bash -c "cd /collection && \
-                    apt-get update && \
-                    apt-get install -y git && \
-                    pip install -U 'pip' 'wheel' 'ansible' 'ansible-core' 'psycopg2-binary' && \
-                    ansible-playbook tests/integration/${TEST_FILE} -v"
-            ;;
-        "all")
-            run_docker_tests "sanity"
-            run_docker_tests "unit"
-            run_docker_tests "integration"
-            ;;
-    esac
-}
 
 start_cockroachdb_container() {
-    echo -e "${GREEN}Starting local CockroachDB container...${NC}"
-    if command -v docker &> /dev/null; then
-        docker-compose -f tests/integration/docker-compose.yml up -d
-    elif command -v podman-compose &> /dev/null; then
+    echo -e "${GREEN}Starting local CockroachDB container with Podman...${NC}"
+    if command -v podman-compose &> /dev/null; then
         podman-compose -f tests/integration/docker-compose.yml up -d
-    elif [ -f "podman-compose-wrapper.sh" ]; then
-        bash podman-compose-wrapper.sh -f tests/integration/docker-compose.yml up -d
     else
-        echo -e "${RED}Error: No container tool found (docker-compose or podman-compose)${NC}"
+        echo -e "${RED}Error: podman-compose not found and podman-compose-wrapper.sh not available${NC}"
         exit 1
     fi
 
@@ -286,12 +230,8 @@ start_cockroachdb_container() {
 
 stop_cockroachdb_container() {
     echo -e "${GREEN}Stopping local CockroachDB container...${NC}"
-    if command -v docker &> /dev/null; then
-        docker-compose -f tests/integration/docker-compose.yml down
-    elif command -v podman-compose &> /dev/null; then
+    if command -v podman-compose &> /dev/null; then
         podman-compose -f tests/integration/docker-compose.yml down
-    elif [ -f "podman-compose-wrapper.sh" ]; then
-        bash podman-compose-wrapper.sh -f tests/integration/docker-compose.yml down
     fi
 }
 
@@ -302,9 +242,6 @@ case "$MODE" in
         ;;
     "podman")
         run_podman_tests "$TEST_TYPE"
-        ;;
-    "docker")
-        run_docker_tests "$TEST_TYPE"
         ;;
 esac
 

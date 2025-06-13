@@ -77,9 +77,6 @@ Integration tests verify that the modules work correctly with an actual Cockroac
 # Run integration tests locally
 ./run_tests.sh --mode local --type integration
 
-# Run with Docker
-./run_tests.sh --mode docker --type integration
-
 # Run with Podman
 ./run_tests.sh --mode podman --type integration
 ```
@@ -104,7 +101,7 @@ Sanity tests check for code quality and documentation standards.
 
 #### Test Environment
 
-For integration tests, a CockroachDB instance is required. The tests use Docker Compose to start a local CockroachDB instance for testing. See docker-compose.yml for details.
+For integration tests, a CockroachDB instance is required. The tests use Podman Compose to start a local CockroachDB instance for testing. See docker-compose.yml for details (compatible with Podman).
 
 #### Test Coverage
 
