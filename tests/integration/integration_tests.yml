@@ -35,17 +35,17 @@
           tags:
             - "{{ item.module }}"
       loop:
-        # - { module: "cockroachdb_info", desc: "Get cluster information" }
-        # - { module: "cockroachdb_db", desc: "Test database operations" }
-        # - { module: "cockroachdb_user", desc: "Test user operations" }
-        # - { module: "cockroachdb_privilege", desc: "Test privilege operations" }
-        # - { module: "cockroachdb_table", desc: "Test table operations" }
-        # - { module: "cockroachdb_index", desc: "Test index operations" }
-        # - { module: "cockroachdb_query", desc: "Test query operations" }
-        # - { module: "cockroachdb_statistics", desc: "Test statistics operations" }
-        # - { module: "cockroachdb_parameter", desc: "Test parameter operations" }
-        # - { module: "cockroachdb_maintenance", desc: "Test maintenance operations" }
-        - { module: "cockroachdb_backup", desc: "Test backup operations" }
+        - { module: "cockroachdb_info", desc: "Get cluster information" }
+        - { module: "cockroachdb_db", desc: "Test database operations" }
+        - { module: "cockroachdb_user", desc: "Test user operations" }
+        - { module: "cockroachdb_privilege", desc: "Test privilege operations" }
+        - { module: "cockroachdb_table", desc: "Test table operations" }
+        - { module: "cockroachdb_index", desc: "Test index operations" }
+        - { module: "cockroachdb_query", desc: "Test query operations" }
+        - { module: "cockroachdb_statistics", desc: "Test statistics operations" }
+        - { module: "cockroachdb_parameter", desc: "Test parameter operations" }
+        - { module: "cockroachdb_maintenance", desc: "Test maintenance operations" }
+        # - { module: "cockroachdb_backup", desc: "Test backup operations" }
       loop_control:
         label: "Running test for {{ item.desc }}"
         index_var: module_index
