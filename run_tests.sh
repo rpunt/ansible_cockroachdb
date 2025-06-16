@@ -240,7 +240,7 @@ EOF
     case "$test_type" in
         "sanity")
             echo -e "${GREEN}Running sanity tests...${NC}"
-            local sanity_cmd="python -c \"import unittest; unittest.main(module='tests.unit.modules', argv=['first-arg-is-ignored', 'TestCockroachDBModules.test_module_imports', 'TestCockroachDBModules.test_documentation_exists'])\""
+            local sanity_cmd="python -c 'import unittest; unittest.main(module=\"tests.unit.modules\", argv=[\"first-arg-is-ignored\", \"TestCockroachDBModules.test_module_imports\", \"TestCockroachDBModules.test_documentation_exists\"])'"
             if [ "$MODE" = "podman" ]; then
                 run_in_container "$sanity_cmd"
             else

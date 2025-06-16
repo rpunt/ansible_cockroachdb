@@ -29,8 +29,17 @@ options:
     description:
       - Apply a predefined parameter profile for specific workload types
       - Setting a profile will apply a group of recommended parameter values at once
+      - Can be one of the built-in profiles or a custom profile name defined in custom_profiles
+      - "Built-in profiles: oltp, olap, hybrid, low_latency, high_throughput, web_application, batch_processing"
     type: str
-    choices: ['oltp', 'olap', 'hybrid', 'low_latency', 'high_throughput', 'web_application', 'batch_processing']
+  custom_profiles:
+    description:
+      - Dictionary of custom parameter profiles that can be referenced by the profile parameter
+      - Each key is a profile name, and the value is a dictionary of parameter names and values
+      - Custom profiles can override or extend the built-in profiles
+      - "Example: { 'my_profile': { 'kv.rangefeed.enabled': true, 'sql.defaults.distsql': 'on' } }"
+    type: dict
+    default: {}
   scope:
     description:
       - Scope for the parameters (cluster or session)
@@ -124,6 +133,39 @@ EXAMPLES = '''
     ssl_key: /path/to/client.key
     ssl_rootcert: /path/to/ca.crt
 
+# Use custom parameter profiles
+- name: Apply custom parameter profile
+  cockroachdb_parameter:
+    profile: my_custom_profile
+    custom_profiles:
+      my_custom_profile:
+        sql.defaults.distsql: "on"
+        kv.rangefeed.enabled: true
+        server.time_until_store_dead: "3m"
+        kv.closed_timestamp.target_duration: "500ms"
+      production_tuned:
+        sql.defaults.distsql: "on"
+        kv.snapshot_rebalance.max_rate: "128MiB"
+        kv.bulk_io_write.max_rate: "1GiB"
+    host: localhost
+    port: 26257
+    user: root
+
+# Combine custom profiles with additional parameters
+- name: Apply custom profile and override specific parameters
+  cockroachdb_parameter:
+    profile: production_tuned
+    custom_profiles:
+      production_tuned:
+        sql.defaults.distsql: "on"
+        kv.snapshot_rebalance.max_rate: "64MiB"
+    parameters:
+      # These will be applied after the profile
+      server.web_session_timeout: "4h"
+    host: localhost
+    port: 26257
+    user: root
+
 # Reset a parameter to default
 - name: Reset parameter to default
   cockroachdb_parameter:
@@ -162,6 +204,16 @@ profile:
   returned: when profile is specified
   type: str
   sample: "oltp"
+custom_profile_used:
+  description: Whether a custom profile was used (vs built-in profile)
+  returned: when custom profile is applied
+  type: bool
+  sample: true
+available_custom_profiles:
+  description: List of custom profile names that were provided
+  returned: when custom_profiles parameter is provided
+  type: list
+  sample: ["my_profile", "production_tuned"]
 reset:
   description: List of parameters that were reset to default values
   returned: when parameters are reset
@@ -419,7 +471,8 @@ PARAMETER_PROFILES = {
 def main():
     argument_spec = dict(
         parameters=dict(type='dict'),
-        profile=dict(type='str', choices=list(PARAMETER_PROFILES.keys())),
+        profile=dict(type='str'),  # Remove choices validation to allow custom profiles
+        custom_profiles=dict(type='dict', default={}),
         scope=dict(type='str', default='cluster', choices=['cluster', 'session']),
         reset_all=dict(type='bool', default=False),
         host=dict(type='str', default='localhost'),
@@ -444,8 +497,21 @@ def main():
 
     parameters = module.params['parameters']
     profile = module.params['profile']
+    custom_profiles = module.params['custom_profiles']
     scope = module.params['scope']
     reset_all = module.params['reset_all']
+
+    # Merge built-in profiles with custom profiles
+    all_profiles = PARAMETER_PROFILES.copy()
+    all_profiles.update(custom_profiles)
+
+    # Validate profile exists if specified
+    if profile and profile not in all_profiles:
+        available_profiles = list(all_profiles.keys())
+        module.fail_json(
+            msg=f"Profile '{profile}' not found. Available profiles: {available_profiles}. "
+                f"You can define custom profiles using the 'custom_profiles' parameter."
+        )
 
     result = {
         'changed': False,
@@ -457,6 +523,8 @@ def main():
 
     if profile:
         result['profile'] = profile
+        if custom_profiles:
+            result['available_custom_profiles'] = list(custom_profiles.keys())
 
     # Initialize the helper
     db = CockroachDBHelper(module)
@@ -479,11 +547,21 @@ def main():
 
         # Handle profile application
         if profile:
-            profile_params = PARAMETER_PROFILES[profile]
-            parameters = profile_params
-            # We'll track the changes in the parameters loop below,
-            # but set up the profile in the result
+            profile_params = all_profiles[profile]
+
+            # If parameters were also provided, merge them with profile parameters
+            # Individual parameters take precedence over profile parameters
+            if parameters:
+                merged_params = profile_params.copy()
+                merged_params.update(parameters)
+                parameters = merged_params
+            else:
+                parameters = profile_params
+
+            # Set up the profile in the result
             result['profile'] = profile
+            if profile in custom_profiles:
+                result['custom_profile_used'] = True
 
         # Handle setting parameters
         if parameters:
