@@ -1,0 +1,260 @@
+---
+#
+# Comprehensive Restore Tests for cockroachdb_backup module
+#
+
+- name: Set variables for restore testing
+  ansible.builtin.set_fact:
+    backup_source_db: "{{ test_db }}"
+    restore_target_db: "{{ test_db }}_restored"
+    backup_collection_uri: "userfile:///backup-collection/idempotency-test"
+    table_restore_target: "{{ test_db }}_table_restored"
+
+# Test 1: Database Restore (with timestamped backup path)
+- name: Get available backups for testing
+  cockroachdb_query:
+    database: "{{ backup_source_db }}"
+    query: "SHOW BACKUPS IN '{{ backup_collection_uri }}'"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: available_backups
+  ignore_errors: true
+
+- name: Display available backups
+  ansible.builtin.debug:
+    var: available_backups
+  when: available_backups is not failed
+
+- name: Set backup path for restore (using most recent)
+  ansible.builtin.set_fact:
+    backup_path: "{{ backup_collection_uri }}{{ available_backups.query_result[-1]['path'] }}"
+  when: available_backups is not failed and available_backups.query_result is defined and available_backups.query_result | length > 0
+
+- name: Display backup path to be used
+  ansible.builtin.debug:
+    var: backup_path
+  when: backup_path is defined
+
+# Cleanup any existing restore target
+- name: Drop restore target database if it exists
+  cockroach_labs.cockroachdb.cockroachdb_db:
+    name: "{{ restore_target_db }}"
+    state: absent
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  ignore_errors: true
+
+# Test: First restore (should succeed)
+- name: Perform database restore (first attempt)
+  cockroach_labs.cockroachdb.cockroachdb_backup:
+    operation: restore
+    database: "{{ restore_target_db }}"
+    uri: "{{ backup_path }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: first_restore_result
+  when: backup_path is defined
+
+- name: Display first restore result
+  ansible.builtin.debug:
+    var: first_restore_result
+  when: backup_path is defined
+
+- name: Verify first restore succeeded
+  ansible.builtin.assert:
+    that:
+      - first_restore_result.changed == true
+      - first_restore_result is not failed
+    fail_msg: "First restore should have succeeded and changed state"
+  when: backup_path is defined and first_restore_result is not failed
+
+# Test: Verify restore target database exists
+- name: Check if restored database exists
+  cockroach_labs.cockroachdb.cockroachdb_query:
+    database: "{{ restore_target_db }}"
+    query: "SELECT COUNT(*) FROM {{ test_table }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: restore_data_check
+  when: backup_path is defined and first_restore_result is not failed
+
+- name: Display restored data count
+  ansible.builtin.debug:
+    var: restore_data_check
+  when: backup_path is defined and restore_data_check is defined
+
+- name: Verify restored data exists
+  ansible.builtin.assert:
+    that:
+      - restore_data_check.query_result is defined
+      - restore_data_check.query_result | length > 0
+      - restore_data_check.query_result[0]['count'] | int > 0
+    fail_msg: "Restored database should contain data"
+  when: backup_path is defined and restore_data_check is not failed
+
+# Test: Second restore attempt (should be idempotent)
+- name: Attempt database restore again (second attempt - should be idempotent)
+  cockroach_labs.cockroachdb.cockroachdb_backup:
+    operation: restore
+    database: "{{ restore_target_db }}"
+    uri: "{{ backup_path }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: second_restore_result
+  when: backup_path is defined and first_restore_result is not failed
+
+- name: Display second restore result
+  ansible.builtin.debug:
+    var: second_restore_result
+  when: backup_path is defined and second_restore_result is defined
+
+- name: Verify restore idempotency
+  ansible.builtin.assert:
+    that:
+      - second_restore_result.changed == false
+      - second_restore_result is not failed
+      - "'already exists' in second_restore_result.msg"
+    fail_msg: "Second restore should be idempotent (changed=false)"
+  when: backup_path is defined and second_restore_result is not failed
+
+# Test 2: Table-level restore (if supported)
+- name: Drop table restore target database if it exists
+  cockroach_labs.cockroachdb.cockroachdb_db:
+    name: "{{ table_restore_target }}"
+    state: absent
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  ignore_errors: true
+
+- name: Create target database for table restore
+  cockroach_labs.cockroachdb.cockroachdb_db:
+    name: "{{ table_restore_target }}"
+    state: present
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  when: backup_path is defined
+
+- name: Attempt table restore
+  cockroach_labs.cockroachdb.cockroachdb_backup:
+    operation: restore
+    table: "{{ backup_source_db }}.{{ test_table }}"
+    uri: "{{ backup_path }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: table_restore_result
+  ignore_errors: true
+  when: backup_path is defined
+
+- name: Display table restore result
+  ansible.builtin.debug:
+    var: table_restore_result
+  when: backup_path is defined and table_restore_result is defined
+
+# Test 3: Restore with invalid backup path (should fail gracefully)
+- name: Attempt restore with invalid backup path
+  cockroach_labs.cockroachdb.cockroachdb_backup:
+    operation: restore
+    database: "nonexistent_restore_db"
+    uri: "userfile:///nonexistent-backup"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: invalid_restore_result
+  ignore_errors: true
+
+- name: Display invalid restore result
+  ansible.builtin.debug:
+    var: invalid_restore_result
+
+- name: Verify invalid restore fails appropriately
+  ansible.builtin.assert:
+    that:
+      - invalid_restore_result is failed
+      - invalid_restore_result.msg is defined
+    fail_msg: "Invalid restore should fail with appropriate error message"
+
+# Test 4: Restore with encryption (if supported)
+- name: Test restore with encryption passphrase (expected to fail without encrypted backup)
+  cockroach_labs.cockroachdb.cockroachdb_backup:
+    operation: restore
+    database: "encrypted_restore_test"
+    uri: "{{ backup_path }}"
+    options:
+      encryption_passphrase: "test_passphrase"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: encrypted_restore_result
+  ignore_errors: true
+  when: backup_path is defined
+
+- name: Display encrypted restore result
+  ansible.builtin.debug:
+    var: encrypted_restore_result
+  when: backup_path is defined and encrypted_restore_result is defined
+
+# Test 5: List operation to verify backup contents
+- name: List backup contents
+  cockroach_labs.cockroachdb.cockroachdb_backup:
+    operation: list
+    uri: "{{ backup_path }}"
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  register: list_backup_result
+  ignore_errors: true
+  when: backup_path is defined
+
+- name: Display backup contents
+  ansible.builtin.debug:
+    var: list_backup_result
+  when: backup_path is defined and list_backup_result is defined
+
+# Cleanup
+- name: Clean up - Drop restore target databases
+  cockroach_labs.cockroachdb.cockroachdb_db:
+    name: "{{ item }}"
+    state: absent
+    host: "{{ cockroach_host }}"
+    port: "{{ cockroach_port }}"
+    user: "{{ cockroach_user }}"
+    ssl_mode: "{{ cockroach_ssl_mode }}"
+  ignore_errors: true
+  loop:
+    - "{{ restore_target_db }}"
+    - "{{ table_restore_target }}"
+    - "encrypted_restore_test"
+    - "nonexistent_restore_db"
+  when: backup_path is defined
+
+# Summary of test results
+- name: Display restore test summary
+  ansible.builtin.debug:
+    msg:
+      - "=== Restore Test Summary ==="
+      - "Database restore (first): {{ 'PASSED' if (first_restore_result is defined and first_restore_result.changed) else 'FAILED/SKIPPED' }}"
+      - "Database restore (idempotency): {{ 'PASSED' if (second_restore_result is defined and not second_restore_result.changed) else 'FAILED/SKIPPED' }}"
+      - "Data verification: {{ 'PASSED' if (restore_data_check is defined and restore_data_check.query_result is defined) else 'FAILED/SKIPPED' }}"
+      - "Table restore: {{ 'TESTED' if table_restore_result is defined else 'SKIPPED' }}"
+      - "Invalid restore handling: {{ 'PASSED' if invalid_restore_result.failed else 'FAILED' }}"
+      - "Backup listing: {{ 'PASSED' if (list_backup_result is defined and not list_backup_result.failed) else 'FAILED/SKIPPED' }}"
+  when: backup_path is defined

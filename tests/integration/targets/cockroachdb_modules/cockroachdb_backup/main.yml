@@ -14,8 +14,11 @@
 - name: Setup
   ansible.builtin.import_tasks: setup.yml
 
-- name: Test idempotency
+- name: Test backup idempotency
   ansible.builtin.import_tasks: idempotency.yml
+
+- name: Test comprehensive restore functionality
+  ansible.builtin.import_tasks: restore_tests.yml
 
 - name: Cleanup
   ansible.builtin.import_tasks: cleanup.yml

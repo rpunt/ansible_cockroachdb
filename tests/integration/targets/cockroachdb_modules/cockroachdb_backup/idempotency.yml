@@ -2,10 +2,10 @@
 #
 # Idempotency Test for cockroachdb_backup module
 #
-
 - name: Set test backup URI
   ansible.builtin.set_fact:
-    test_backup_uri: "userfile:///backup-idempotency-test"
+    test_backup_uri: "userfile:///backup-collection"
+    specific_backup_uri: "userfile:///backup-collection/idempotency-test"
 
 #
 # Backup idempotency tests
@@ -14,7 +14,7 @@
   cockroachdb_backup:
     operation: backup
     database: "{{ test_db }}"
-    uri: "{{ test_backup_uri }}"
+    uri: "{{ specific_backup_uri }}"
     host: "{{ cockroach_host }}"
     port: "{{ cockroach_port }}"
     user: "{{ cockroach_user }}"
@@ -30,7 +30,7 @@
   cockroachdb_backup:
     operation: backup
     database: "{{ test_db }}"
-    uri: "{{ test_backup_uri }}"
+    uri: "{{ specific_backup_uri }}"
     host: "{{ cockroach_host }}"
     port: "{{ cockroach_port }}"
     user: "{{ cockroach_user }}"
@@ -72,7 +72,7 @@
   cockroachdb_backup:
     operation: restore
     database: "{{ restore_db }}"
-    uri: "{{ test_backup_uri }}"
+    uri: "{{ specific_backup_uri }}"
     host: "{{ cockroach_host }}"
     port: "{{ cockroach_port }}"
     user: "{{ cockroach_user }}"
@@ -90,7 +90,7 @@
   cockroachdb_backup:
     operation: restore
     database: "{{ restore_db }}"
-    uri: "{{ test_backup_uri }}"
+    uri: "{{ specific_backup_uri }}"
     host: "{{ cockroach_host }}"
     port: "{{ cockroach_port }}"
     user: "{{ cockroach_user }}"

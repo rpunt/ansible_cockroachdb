@@ -206,6 +206,7 @@ backups:
   sample: ['s3://my-bucket/backups/production/2025-06-01/', 's3://my-bucket/backups/production/2025-06-02/']
 '''
 
+import sys
 import time
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.cockroachdb import CockroachDBHelper
@@ -260,8 +261,6 @@ def main():
         'uri': uri
     }
 
-    sys.exit(1)
-
     if database:
         result['database'] = database
 
@@ -287,76 +286,97 @@ def main():
             # Construct BACKUP command
             backup_target = f"DATABASE {database}" if database and not table else f"TABLE {table}"
 
-            # Simplify our idempotency check for CockroachDB 23.2+
-            # Due to the complexity of checking existing backups in different CockroachDB versions,
-            # we'll use a more basic approach that relies on a marker file or naming convention
+            # Check if backup already exists using SHOW BACKUPS IN for idempotency
+            backup_exists = False
 
-            # Generate a unique identifier for this backup configuration
-            import hashlib
-            import json
+            # For idempotency, we check if any recent backup exists for this target
+            # CockroachDB creates timestamped subdirectories for each backup
+            try:
+                # Check for existing backups in the collection
+                check_cmd = f"SHOW BACKUPS IN '{uri}'"
+                existing_backups = db.execute_query(check_cmd)
 
-            # Create a configuration hash that represents this backup operation
-            backup_config = {
-                'target': backup_target,
-                'uri': uri,
-                'as_of_timestamp': options.get('as_of_timestamp'),
-                'incremental_from': options.get('incremental_from'),
-                # Exclude encryption details from the hash to avoid security issues
-            }
+                if existing_backups and len(existing_backups) > 0:
+                    # If any backups exist in this collection, check the most recent one
+                    most_recent_backup = sorted(existing_backups, key=lambda x: x[0])[-1]
+                    backup_path = most_recent_backup[0]
 
-            config_str = json.dumps(backup_config, sort_keys=True)
-            config_hash = hashlib.md5(config_str.encode()).hexdigest()
+                    # Check if the backup is for the same target (database/table)
+                    # by inspecting the backup manifest using the new syntax
+                    backup_path = most_recent_backup[0]
+                    try:
+                        # Use the new SHOW BACKUP FROM ... IN ... syntax
+                        # Extract collection path and backup subdirectory
+                        show_cmd = f"SHOW BACKUP FROM '{backup_path}' IN '{uri}'"
+                        backup_details = db.execute_query(show_cmd)
 
-            # Add a timestamp to the backup URI if it doesn't already have one
-            # This helps with idempotency checks - same config = same name
-            if '/backup-' not in uri.lower() and config_hash not in uri:
-                import datetime
-                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                if uri.endswith('/'):
-                    uri = f"{uri}backup-{timestamp}-{config_hash[:8]}"
-                else:
-                    uri = f"{uri}/backup-{timestamp}-{config_hash[:8]}"
+                        # Check if this backup contains our target database/table
+                        target_found = False
+                        if backup_details:
+                            for detail_row in backup_details:
+                                # Columns: database_name, parent_schema_name, object_name, object_type, ...
+                                db_name = detail_row[0] if len(detail_row) > 0 else None
+                                parent_schema = detail_row[1] if len(detail_row) > 1 else None
+                                object_name = detail_row[2] if len(detail_row) > 2 else None
+                                object_type = detail_row[3] if len(detail_row) > 3 else None
 
-            # For idempotency, we'll check if this is a repeated call with same params
-            # We'll use module.params directly to detect if this is an idempotent call
-            if hasattr(module, '_backup_idempotency_check') and module._backup_idempotency_check == config_hash:
-                result['changed'] = False
-                result['msg'] = f"Backup already exists with identical configuration"
-                return result
+                                # For database backup: check if database exists in backup
+                                if database and not table:
+                                    if object_type == 'database' and object_name == database:
+                                        target_found = True
+                                        break
+                                # For table backup: check if specific table exists in backup
+                                elif table:
+                                    if (object_type == 'table' and
+                                        db_name == database and
+                                        object_name == table):
+                                        target_found = True
+                                        break
 
-            # Set idempotency marker for next time
-            module._backup_idempotency_check = config_hash
+                        if target_found:
+                            backup_exists = True
 
-            # Always perform the backup - if it fails due to already existing, we'll handle that
-            backup_needed = True
+                    except Exception as show_e:
+                        # If we can't inspect the backup, be conservative and assume no match
+                        pass
 
-            # Only perform the backup if needed
-            if backup_needed:
-                cmd_parts = [f"BACKUP {backup_target} INTO '{uri}'"]
+                if backup_exists:
+                    result['changed'] = False
+                    result['msg'] = f"Recent backup already exists for {backup_target} at {uri}"
+                    module.exit_json(**result)
 
-                # Add AS OF SYSTEM TIME if specified
-                if options.get('as_of_timestamp'):
-                    cmd_parts.append(f"AS OF SYSTEM TIME '{options['as_of_timestamp']}'")
+            except Exception as e:
+                # If SHOW BACKUPS IN fails, the collection likely doesn't exist
+                # This is expected for the first backup
+                backup_exists = False
 
-                # Add incremental_from if specified
-                if options.get('incremental_from'):
-                    incremental_locations = [f"'{loc}'" for loc in options['incremental_from']]
-                    cmd_parts.append(f"INCREMENTAL FROM {', '.join(incremental_locations)}")
+            # Build the backup command since no existing backup was found
+            cmd_parts = [f"BACKUP {backup_target} INTO '{uri}'"]
 
-                # Add KMS if specified
-                if options.get('kms_uri'):
-                    cmd_parts.append(f"KMS = '{options['kms_uri']}'")
+            # Add AS OF SYSTEM TIME if specified
+            if options.get('as_of_timestamp'):
+                cmd_parts.append(f"AS OF SYSTEM TIME '{options['as_of_timestamp']}'")
 
-                # Add encryption if specified
-                if options.get('encryption_passphrase'):
-                    cmd_parts.append(f"ENCRYPTION_PASSPHRASE = '{options['encryption_passphrase']}'")
+            # Add incremental_from if specified
+            if options.get('incremental_from'):
+                incremental_locations = [f"'{loc}'" for loc in options['incremental_from']]
+                cmd_parts.append(f"INCREMENTAL FROM {', '.join(incremental_locations)}")
 
-                # Add WITH clause for detached option
-                if options.get('detached', False):
-                    cmd_parts.append("WITH DETACHED")
+            # Add KMS if specified
+            if options.get('kms_uri'):
+                cmd_parts.append(f"KMS = '{options['kms_uri']}'")
 
-                backup_cmd = " ".join(cmd_parts)
+            # Add encryption if specified
+            if options.get('encryption_passphrase'):
+                cmd_parts.append(f"ENCRYPTION_PASSPHRASE = '{options['encryption_passphrase']}'")
 
+            # Add WITH clause for detached option
+            if options.get('detached', False):
+                cmd_parts.append("WITH DETACHED")
+
+            backup_cmd = " ".join(cmd_parts)
+
+            try:
                 # Execute the backup command
                 response = db.execute_query(backup_cmd)
 
@@ -365,9 +385,33 @@ def main():
                     result['job_id'] = response[0][0]
 
                 result['changed'] = True
-            else:
-                result['changed'] = False
-                result['msg'] = f"Backup already exists at {uri} for {backup_target}"
+
+            except Exception as e:
+                # Check if backup failed because it already exists or is a duplicate
+                error_msg = str(e).lower()
+                if ('already exists' in error_msg or
+                    'duplicate' in error_msg or
+                    'backup already exists' in error_msg or
+                    'subdirectory already exists' in error_msg or
+                    'directory is not empty' in error_msg):
+                    # This is an idempotent case - backup already exists
+                    result['changed'] = False
+                    result['msg'] = f"Backup already exists at {uri}"
+                else:
+                    # For other errors, try one more check to see if backup exists
+                    try:
+                        check_cmd = f"SHOW BACKUP '{uri}'"
+                        existing_backup = db.execute_query(check_cmd)
+                        if existing_backup and len(existing_backup) > 0:
+                            # Backup exists, so this is idempotent
+                            result['changed'] = False
+                            result['msg'] = f"Backup already exists at {uri}"
+                        else:
+                            # Re-raise the original error if backup doesn't exist
+                            module.fail_json(msg=str(e))
+                    except:
+                        # If we can't check, re-raise the original error
+                        module.fail_json(msg=str(e))
 
         elif operation == 'restore':
             if not database and not table:
@@ -412,7 +456,6 @@ def main():
                     result['changed'] = False
                     result['msg'] = f"Target {restore_target} already exists, restore not needed"
                     result['target_exists'] = target_exists
-                    return result
 
             except Exception as e:
                 # If we can't check if target exists, assume we need to restore
@@ -421,15 +464,55 @@ def main():
 
             # Only perform the restore if needed
             if restore_needed:
-                cmd_parts = [f"RESTORE {restore_target} FROM '{uri}'"]
+                # Build WITH options
+                with_options = []
 
                 # Add encryption if specified
                 if options.get('encryption_passphrase'):
-                    cmd_parts.append(f"ENCRYPTION_PASSPHRASE = '{options['encryption_passphrase']}'")
+                    with_options.append(f"encryption_passphrase = '{options['encryption_passphrase']}'")
 
-                # Add WITH clause for detached option
+                # Add detached option if specified
                 if options.get('detached', False):
-                    cmd_parts.append("WITH DETACHED")
+                    with_options.append("detached")
+
+                # For database restore, we need to handle the case where we're restoring to a different name
+                if database and not table:
+                    # First, try to get what's in the backup to determine the original database name
+                    try:
+                        # Check if the URI is a full backup path or a collection with subdirectory
+                        if '/' in uri.replace('userfile:///', '').replace('s3://', '').replace('gs://', ''):
+                            # This looks like a full path to a specific backup
+                            show_backup_cmd = f"SHOW BACKUP '{uri}'"
+                        else:
+                            # This is a collection path, we need to use the new syntax with a specific backup
+                            # For now, fall back to the old syntax for single backup paths
+                            show_backup_cmd = f"SHOW BACKUP '{uri}'"
+
+                        backup_contents = db.execute_query(show_backup_cmd)
+                        original_db_name = None
+
+                        if backup_contents:
+                            for row in backup_contents:
+                                # Find the database entry (object_type = 'database')
+                                if len(row) > 3 and row[3] == 'database':
+                                    original_db_name = row[2]  # object_name column
+                                    break
+
+                        # If restoring to a different name, use new_db_name option
+                        if original_db_name and original_db_name != database:
+                            with_options.append(f"new_db_name = '{database}'")
+                            # Use the original database name in the RESTORE command
+                            restore_target = f"DATABASE {original_db_name}"
+
+                    except Exception as e:
+                        # If we can't determine the original name, proceed with the specified name
+                        module.warn(f"Could not determine original database name from backup: {str(e)}")
+
+                # Construct the restore command
+                cmd_parts = [f"RESTORE {restore_target} FROM '{uri}'"]
+
+                if with_options:
+                    cmd_parts.append(f"WITH {', '.join(with_options)}")
 
                 restore_cmd = " ".join(cmd_parts)
 
@@ -446,22 +529,70 @@ def main():
                 result['target_exists'] = target_exists
 
         elif operation == 'list':
-            # List available backups
-            list_cmd = f"SHOW BACKUP '{uri}'"
-            backups = db.execute_query(list_cmd)
+            # List/show backup contents using the new syntax
+            try:
+                # Parse the URI to determine if it's a collection path or specific backup path
+                # Example: 'userfile:///backup-collection/idempotency-test/2025/06/16-202742.43'
+                # Should become: collection='userfile:///backup-collection/idempotency-test', subdirectory='2025/06/16-202742.43'
 
-            # Format the result
-            backup_list = []
-            if backups:
-                for backup in backups:
-                    backup_list.append({
-                        'path': backup[0],
-                        'start_time': backup[1].isoformat() if backup[1] else None,
-                        'end_time': backup[2].isoformat() if backup[2] else None,
-                        'size_bytes': backup[3],
-                    })
+                if '://' in uri:
+                    scheme_and_path = uri.split('://', 1)
+                    scheme = scheme_and_path[0] + '://'
+                    path = scheme_and_path[1]
+                else:
+                    scheme = ''
+                    path = uri
 
-            result['backups'] = backup_list
+                # Remove leading slashes and split the path
+                path = path.lstrip('/')
+                path_components = path.split('/')
+
+                if len(path_components) >= 3:  # backup-collection/idempotency-test/2025/06/16-202742.43 format
+                    # For nested backup collections, the last component is the backup ID
+                    backup_subdirectory = path_components[-1]  # Just the backup ID
+                    collection_parts = path_components[:-1]  # Everything except the last part
+                    collection_path = scheme + '/' + '/'.join(collection_parts)
+
+                    # Use new syntax: SHOW BACKUP FROM <subdirectory> IN <collection>
+                    list_cmd = f"SHOW BACKUP FROM '{backup_subdirectory}' IN '{collection_path}'"
+                elif len(path_components) >= 2:  # collection/backup_id format
+                    collection_path = scheme + '/' + path_components[0]
+                    backup_subdirectory = '/'.join(path_components[1:])
+                    list_cmd = f"SHOW BACKUP FROM '{backup_subdirectory}' IN '{collection_path}'"
+                else:
+                    # Fall back to old syntax for simple paths
+                    list_cmd = f"SHOW BACKUP '{uri}'"
+
+                backup_contents = db.execute_query(list_cmd)
+            except Exception as e:
+                # If new syntax fails, try the old syntax as fallback
+                try:
+                    list_cmd = f"SHOW BACKUP '{uri}'"
+                    backup_contents = db.execute_query(list_cmd)
+                except Exception as fallback_e:
+                    module.fail_json(msg=f"Failed to show backup contents: {str(e)}. Fallback also failed: {str(fallback_e)}")
+
+            # Format the result - this shows the contents of a backup, not a list of backups
+            content_list = []
+            if backup_contents:
+                for content in backup_contents:
+                    # SHOW BACKUP returns: database_name, parent_schema_name, object_name, object_type, backup_type, start_time, end_time, size_bytes, rows, is_full_cluster, regions
+                    content_item = {
+                        'database_name': content[0] if len(content) > 0 and content[0] else None,
+                        'parent_schema_name': content[1] if len(content) > 1 and content[1] else None,
+                        'object_name': content[2] if len(content) > 2 else None,
+                        'object_type': content[3] if len(content) > 3 else None,
+                        'backup_type': content[4] if len(content) > 4 else None,
+                        'start_time': str(content[5]) if len(content) > 5 and content[5] else None,
+                        'end_time': str(content[6]) if len(content) > 6 and content[6] else None,
+                        'size_bytes': content[7] if len(content) > 7 and content[7] else None,
+                        'rows': content[8] if len(content) > 8 and content[8] else None,
+                        'is_full_cluster': content[9] if len(content) > 9 and content[9] else None,
+                    }
+
+                    content_list.append(content_item)
+
+            result['backup_contents'] = content_list
 
     except Exception as e:
         module.fail_json(msg=str(e))
