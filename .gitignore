@@ -6,6 +6,9 @@
 ansible_collections/
 *.tar.gz
 
+### Testing data ###
+cockroach-data/
+
 ### dotenv ###
 .env
 

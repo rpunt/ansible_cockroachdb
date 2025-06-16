@@ -6,6 +6,10 @@
     cockroach_user: root
     cockroach_ssl_mode: disable
     test_data_prefix: "cockroachdb_user"
+    test_db: "cockroachdb_user_idempotency_test_db"
+    test_user_no_priv: "cockroachdb_user_test_user_no_priv"
+    test_user_with_priv: "cockroachdb_user_test_user_with_priv"
+    test_user_update_priv: "cockroachdb_user_test_user_update_priv"
 
 - name: Run idempotency tests
   ansible.builtin.import_tasks: idempotency.yml

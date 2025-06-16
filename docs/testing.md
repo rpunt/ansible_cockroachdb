@@ -6,16 +6,16 @@ This document describes how to test the CockroachDB Ansible collection using var
 
 - Python 3.6 or higher with pip
 - Ansible 2.9 or higher
-- For containerized testing:
-  - Podman
+- Podman (recommended for default testing mode)
+- For containerized CockroachDB testing:
   - podman-compose or the included podman-compose-wrapper.sh (for integration tests)
 
 ## Overview of Testing Scripts
 
 The collection includes several scripts to facilitate testing:
 
-1. `run_tests.sh` - Comprehensive script supporting multiple testing environments (local, podman)
-2. `test_with_podman.sh` - Script for running tests specifically in Podman containers
+1. `run_tests.sh` - Primary comprehensive script supporting multiple testing environments (podman by default, local as an advanced option)
+2. `test_with_podman.sh` - Legacy script for running tests specifically in Podman containers
 3. `test_local.sh` - Script for quick testing of individual modules locally
 4. `test_module.sh` - Script for testing specific modules
 5. `podman-compose-wrapper.sh` - Helper script for running podman-compose commands
@@ -35,26 +35,29 @@ The testing scripts support several types of tests:
 The `run_tests.sh` script supports multiple testing environments and configurations:
 
 ```bash
-# Run all tests locally
+# Run all tests with default settings (Podman mode)
+./run_tests.sh
+
+# Run all tests locally (advanced option)
 ./run_tests.sh --mode local --type all
 
 # Run sanity tests in a Podman container
-./run_tests.sh --mode podman --type sanity
+./run_tests.sh --type sanity
 
 # Run integration tests in Podman with containerized CockroachDB
-./run_tests.sh --mode podman --type integration --container
+./run_tests.sh --type integration --container
 
 # Get help on all options
 ./run_tests.sh --help
 ```
 
+> 💡 **Note:** Podman is the default and recommended testing environment as it provides consistent and isolated conditions for testing. Local testing is available as an advanced option for development purposes.
+
 ### Command-line Options for run_tests.sh
 
-- `--mode, -m MODE`: Test mode (local, podman)
-- `--type, -t TYPE`: Test type (all, sanity, unit, integration)
-- `--file, -f FILE`: Test file (consolidated_tests.yml, integration_tests.yml, comprehensive_tests.yml, simplified_tests.yml)
-- `--test-mode, -d MODE`: Test depth mode (basic, standard, comprehensive)
-- `--container, -c`: Use containers for CockroachDB
+- `--mode, -m MODE`: Test mode (podman, local) - default is podman
+- `--type, -t TYPE`: Test type (all, sanity, unit, integration) - default is all
+- `--container, -c`: Use containers for CockroachDB - default is false
 - `--verbose, -v`: Enable verbose output
 - `--help, -h`: Show help message
 
@@ -74,7 +77,7 @@ For quick testing of individual modules:
 
 ### Using Podman Specifically
 
-If you prefer to use Podman containers for testing:
+Podman is now the default testing environment for the `run_tests.sh` script. However, if you want to use the legacy Podman-specific script:
 
 ```bash
 # Run all tests
@@ -90,63 +93,65 @@ If you prefer to use Podman containers for testing:
 ./test_with_podman.sh --integration
 ```
 
+> ⚠️ **Note:** The `test_with_podman.sh` script is maintained for backward compatibility, but the recommended approach is to use `run_tests.sh` which defaults to Podman mode.
+
 ## Integration Testing
 
-Integration tests require a running CockroachDB instance. The script will:
+Integration tests require a running CockroachDB instance. When using the `--container` option or Podman mode, the script will:
 
 1. Start a CockroachDB container using the configuration in `tests/integration/docker-compose.yml` with Podman
 2. Run the integration tests
 3. Stop the CockroachDB container when tests are complete
 
-### Consolidated Test Framework
+Without the `--container` option in local mode, you'll need a locally running CockroachDB instance accessible at localhost:26257.
 
-The collection includes a new consolidated test framework that combines all previous test files into a single, modular system. This framework features:
+### Integration Test Structure
+
+The integration tests in the collection have the following features:
 
 - **Variable-based configuration** for connection parameters
 - **Modular test structure** with module-specific test blocks
-- **Three test modes**:
-  - `basic` - Only tests core functionality (info, database, query operations)
-  - `standard` - Tests common modules (info, database, user, privilege, table, index, query)
-  - `comprehensive` - Tests all modules including advanced features
+- **Environment variable configuration** for connection parameters
 
-#### Using the Consolidated Test Framework
+#### Running Integration Tests
 
-Run tests with the consolidated framework using the `run_tests.sh` script with the new `--test-mode` option:
+Run integration tests using the `run_tests.sh` script:
 
 ```bash
-# Run basic tests
-./run_tests.sh --type integration --test-mode basic
-
-# Run standard tests (default)
+# Run integration tests with default settings (Podman mode)
 ./run_tests.sh --type integration
 
-# Run comprehensive tests
-./run_tests.sh --type integration --test-mode comprehensive
+# Run integration tests in local mode
+./run_tests.sh --mode local --type integration
+
+# Run integration tests with containerized CockroachDB
+./run_tests.sh --type integration --container
 ```
 
-#### Test Modules in Each Mode
+#### Modules Tested in Integration Tests
 
-| Module | Basic Mode | Standard Mode | Comprehensive Mode |
-|--------|------------|---------------|-------------------|
-| cockroachdb_info | ✅ | ✅ | ✅ |
-| cockroachdb_db | ✅ | ✅ | ✅ |
-| cockroachdb_query | ✅ | ✅ | ✅ |
-| cockroachdb_user | ❌ | ✅ | ✅ |
-| cockroachdb_privilege | ❌ | ✅ | ✅ |
-| cockroachdb_table | ❌ | ✅ | ✅ |
-| cockroachdb_index | ❌ | ✅ | ✅ |
-| cockroachdb_statistics | ❌ | ❌ | ✅ |
-| cockroachdb_parameter | ❌ | ❌ | ✅ |
-| cockroachdb_maintenance | ❌ | ❌ | ✅ |
-| cockroachdb_backup | ❌ | ❌ | ✅ |
+The integration tests cover all the modules in the collection:
+
+| Module | Description |
+|--------|-------------|
+| cockroachdb_info | Gather information about CockroachDB |
+| cockroachdb_db | Manage CockroachDB databases |
+| cockroachdb_query | Execute SQL queries in CockroachDB |
+| cockroachdb_user | Manage CockroachDB users |
+| cockroachdb_privilege | Manage CockroachDB privileges |
+| cockroachdb_table | Manage CockroachDB tables |
+| cockroachdb_index | Manage CockroachDB indexes |
+| cockroachdb_statistics | Manage CockroachDB statistics |
+| cockroachdb_parameter | Manage CockroachDB parameters |
+| cockroachdb_maintenance | Perform CockroachDB maintenance operations |
+| cockroachdb_backup | Manage CockroachDB backups |
 
 #### Environment Variables
 
-The consolidated test framework supports the following environment variables:
+The integration tests support the following environment variables:
 
 | Variable Name | Description | Default |
 |---------------|-------------|---------|
-| CRDB_TEST_MODE | Test mode: basic, standard, comprehensive | standard |
 | COCKROACH_HOST | Database host | localhost |
 | COCKROACH_PORT | Database port | 26257 |
 | COCKROACH_USER | Database user | root |
@@ -156,26 +161,13 @@ The consolidated test framework supports the following environment variables:
 | COCKROACH_SSL_KEY | SSL key path | - |
 | COCKROACH_SSL_ROOTCERT | SSL root certificate path | - |
 
-#### Legacy Test Files
+#### Integration Test Files
 
-For backward compatibility, the original test files are still available:
+The following test files are included:
 
-- `integration_tests.yml` - Basic tests for core functionality
-- `comprehensive_tests.yml` - Complete tests for all modules
-- `simplified_tests.yml` - Tests with variables and structured approach
+- `integration_tests.yml` - Default test file used for integration tests
 
-To use these files with the `run_tests.sh` script:
-
-```bash
-# Run simple integration tests
-./run_tests.sh -t integration -f integration_tests.yml
-
-# Run comprehensive tests
-./run_tests.sh -t integration -f comprehensive_tests.yml
-
-# Run simplified tests
-./run_tests.sh -t integration -f simplified_tests.yml
-```
+The `--file` and `--test-mode` options have been removed from the latest version of `run_tests.sh` for simplification. The script now uses the standard `integration_tests.yml` file for all integration testing.
 
 ## Adding New Tests
 
@@ -209,11 +201,49 @@ The collection follows the standard Ansible collection test structure:
 - `tests/integration/`: Contains integration tests that require CockroachDB
 - `tests/output/`: Contains test results and coverage reports
 
+## Testing Modes
+
+The `run_tests.sh` script supports two primary testing modes:
+
+### Podman Mode (Default)
+
+Podman mode creates isolated containers for running tests, providing a consistent and reproducible testing environment. This is the recommended mode for:
+
+- CI/CD pipelines
+- Consistent test results across different environments
+- Testing without altering your local system configuration
+- Ensuring all dependencies are properly installed
+
+### Local Mode (Advanced)
+
+Local mode runs tests directly on your host system. This mode is available as an advanced option for:
+
+- Development workflows where you need quick feedback
+- Debugging specific issues
+- Environments where containers can't be used
+- Custom or specialized testing setups
+
+**IMPORTANT: For local mode, you must have CockroachDB installed and running locally before starting tests.** You can start CockroachDB with:
+
+```bash
+cockroach start-single-node --insecure --background
+```
+
+**Requirements for local mode:**
+
+- The CockroachDB server must be accessible on localhost:26257 with user 'root' without a password
+- For integration tests, your local CockroachDB instance must allow creating/dropping databases and users
+- Currently, sanity and unit tests may fail in local mode due to issues with build artifacts
+- The script will attempt to configure the proper ANSIBLE_COLLECTIONS_PATH but you may need to manually set it if modules can't be found
+
+We recommend using the default Podman mode unless you have specific requirements that necessitate local testing.
+
 ## Troubleshooting
 
 If you encounter issues with the tests, try these steps:
 
 1. Ensure your Python environment has all required dependencies:
+
    ```bash
    pip install ansible ansible-core psycopg2-binary
    ```
@@ -227,6 +257,31 @@ If you encounter issues with the tests, try these steps:
 5. Review the container logs for detailed error messages
 
 6. Try running tests with the `--verbose` flag for more detailed output:
+
    ```bash
-   ./run_tests.sh --mode local --type unit --verbose
+   ./run_tests.sh --type unit --verbose
+   ```
+
+7. If running in local mode, ensure CockroachDB is installed and running:
+
+   ```bash
+   # Check if CockroachDB is installed
+   which cockroach
+
+   # Start CockroachDB if not running
+   cockroach start-single-node --insecure --background
+
+   # Verify CockroachDB is running
+   cockroach sql --insecure -e "SHOW DATABASES;"
+   ```
+
+8. If you get a "couldn't resolve module/action 'cockroach_labs.cockroachdb.cockroachdb_*'" error in local mode:
+
+   ```bash
+   # Set the ANSIBLE_COLLECTIONS_PATH manually
+   export ANSIBLE_COLLECTIONS_PATH="$(pwd):$HOME/.ansible/collections:/usr/share/ansible/collections"
+
+   # Or try manually installing the collection
+   ansible-galaxy collection build --force
+   ansible-galaxy collection install cockroach_labs-cockroachdb-*.tar.gz --force
    ```

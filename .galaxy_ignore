@@ -1,0 +1,21 @@
+# Ignore CockroachDB data files
+cockroach-data/
+cockroach-data/*
+
+# Common development files
+*.pyc
+__pycache__/
+.pytest_cache/
+.DS_Store
+*.swp
+*.swo
+
+# Testing artifacts
+*.tar.gz
+MANIFEST.json
+ansible_collections/
+container_setup.sh
+
+# Virtual environments
+venv/
+.venv/

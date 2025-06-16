@@ -1,12 +1,4 @@
 ---
-# Set variables for idempotency tests
-- name: Set test variables for idempotency tests
-  ansible.builtin.set_fact:
-    test_db: "{{ test_data_prefix }}_cockroachdb_user_idempotency_test_db"
-    test_user_no_priv: "{{ test_data_prefix }}_cockroachdb_user_test_user_no_priv"
-    test_user_with_priv: "{{ test_data_prefix }}_cockroachdb_user_test_user_with_priv"
-    test_user_update_priv: "{{ test_data_prefix }}_cockroachdb_user_test_user_update_priv"
-
 # Cleanup phase: drop existing test data
 - name: Drop test objects
   block:

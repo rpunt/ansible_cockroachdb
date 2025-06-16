@@ -16,6 +16,8 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+    environment:
+      - COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING=true
 
 volumes:
   cockroachdb-data:

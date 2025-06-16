@@ -74,12 +74,14 @@ This collection includes various types of tests that can be run to ensure everyt
 Integration tests verify that the modules work correctly with an actual CockroachDB instance.
 
 ```bash
-# Run integration tests locally
-./run_tests.sh --mode local --type integration
+# Run integration tests (default mode - Podman)
+./run_tests.sh --type integration
 
-# Run with Podman
-./run_tests.sh --mode podman --type integration
+# Run with local mode (advanced option)
+./run_tests.sh --mode local --type integration
 ```
+
+> **Note:** Podman is the default and recommended testing environment as it provides consistent and isolated testing conditions.
 
 #### Unit Tests
 
@@ -101,7 +103,7 @@ Sanity tests check for code quality and documentation standards.
 
 #### Test Environment
 
-For integration tests, a CockroachDB instance is required. The tests use Podman Compose to start a local CockroachDB instance for testing. See docker-compose.yml for details (compatible with Podman).
+For integration tests, a CockroachDB instance is required. By default, tests use Podman Compose to start a local CockroachDB instance for testing. You can also run tests with the `--container` option to use containerized CockroachDB even in local mode. See docker-compose.yml for details (compatible with Podman).
 
 #### Test Coverage
 

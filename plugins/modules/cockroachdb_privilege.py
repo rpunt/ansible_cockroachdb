@@ -748,8 +748,8 @@ def main():
         # Connect to the specific database
         helper.connect_to_database(database_name)
 
-        # Schema privilege idempotency fix - always force idempotency
-        # if roles already have any privileges granted on the schema
+        # Schema privilege idempotency fix - check if the specific requested privileges
+        # already exist for the roles on the schema
         if on_type == 'schema' and state == 'grant':
             module.debug("Applying enhanced schema privilege idempotency check")
             schema_query = f"SHOW GRANTS ON SCHEMA {object_name}"
@@ -760,12 +760,23 @@ def main():
                 schema_privs_by_role = {}
 
                 for row in schema_grants:
-                    # Handle different row formats (dict or list)
+                    # Handle different row formats (dict, list, or tuple)
                     if isinstance(row, dict):
                         grantee = row.get('grantee')
                         privilege = row.get('privilege_type')
-                    elif isinstance(row, list) and len(row) >= 3:
+                        is_grantable = row.get('is_grantable', False)
+                    elif isinstance(row, (list, tuple)) and len(row) >= 5:
+                        # Schema grants format: [database, schema, grantee, privilege, is_grantable]
+                        _, _, grantee, privilege, is_grantable = row[:5]
+                        is_grantable = is_grantable in [True, 'YES', 'yes', 't', 'true']
+                    elif isinstance(row, (list, tuple)) and len(row) >= 4:
+                        # Alternative format: [database, grantee, privilege, is_grantable]
+                        _, grantee, privilege, is_grantable = row[:4]
+                        is_grantable = is_grantable in [True, 'YES', 'yes', 't', 'true']
+                    elif isinstance(row, (list, tuple)) and len(row) >= 3:
+                        # Basic format: [database, grantee, privilege]
                         _, grantee, privilege = row[:3]
+                        is_grantable = False
                     else:
                         continue
 
@@ -777,12 +788,44 @@ def main():
                         # Store full privilege structure
                         schema_privs_by_role[grantee].append({
                             'privilege': privilege,
-                            'grantable': False  # Default since we don't track this properly
+                            'grantable': bool(is_grantable)
                         })
 
-                # Check if any role has any privileges on this schema
-                if any(len(privs) > 0 for role, privs in schema_privs_by_role.items()):
-                    module.debug("Schema privileges already exist - forcing idempotency")
+                # Check if ALL the requested privileges already exist for ALL roles
+                all_privs_exist = True
+                requested_privs_set = set(privileges)
+
+                for role in roles:
+                    if role not in schema_privs_by_role:
+                        all_privs_exist = False
+                        break
+
+                    # Get the privileges this role currently has
+                    current_privs_set = {p['privilege'] for p in schema_privs_by_role[role]}
+
+                    # Check if all requested privileges exist
+                    missing_privs = requested_privs_set - current_privs_set
+                    if missing_privs:
+                        all_privs_exist = False
+                        module.debug(f"Role {role} is missing privileges: {missing_privs}")
+                        break
+
+                    # Check grant option if requested
+                    if with_grant_option:
+                        for priv in requested_privs_set:
+                            priv_has_grant = any(
+                                p['privilege'] == priv and p['grantable']
+                                for p in schema_privs_by_role[role]
+                            )
+                            if not priv_has_grant:
+                                all_privs_exist = False
+                                module.debug(f"Role {role} privilege {priv} lacks grant option")
+                                break
+                        if not all_privs_exist:
+                            break
+
+                if all_privs_exist:
+                    module.debug("All requested schema privileges already exist - forcing idempotency")
                     result = {
                         'changed': False,
                         'queries': [],
@@ -796,72 +839,7 @@ def main():
             if not helper.role_exists(role):
                 module.fail_json(msg=f"Role '{role}' does not exist")
 
-        # Special direct check for schema privileges idempotency
-        if on_type == 'schema' and state == 'grant':
-            try:
-                module.debug(f"Performing direct schema privilege check for {object_name}")
-                schema_query = f"SHOW GRANTS ON SCHEMA {object_name}"
-                schema_result = helper.execute_query(schema_query)
-
-                # Extract privileges by role
-                schema_role_privs = {}
-
-                for row in schema_result:
-                    # Handle different row formats
-                    if isinstance(row, dict):
-                        # Dict format
-                        grantee = row.get('grantee')
-                        priv_type = row.get('privilege_type')
-                    elif isinstance(row, list) and len(row) >= 3:
-                        # List format
-                        _, grantee, priv_type = row[:3]
-                    else:
-                        continue
-
-                    # Only include roles we care about
-                    if roles and grantee in roles:
-                        if grantee not in schema_role_privs:
-                            schema_role_privs[grantee] = set()
-                        schema_role_privs[grantee].add(priv_type)
-
-                # Check if all roles already have all requested privileges
-                all_have_privs = True
-                for role in roles:
-                    if role not in schema_role_privs:
-                        module.debug(f"Role {role} has no schema privileges")
-                        all_have_privs = False
-                        break
-
-                    role_privs = schema_role_privs[role]
-                    module.debug(f"Direct schema check: Role {role} has privileges: {role_privs}")
-
-                    # Check if ALL or all requested privileges are present
-                    if 'ALL' in role_privs:
-                        continue
-
-                    for priv in privileges:
-                        if priv not in role_privs:
-                            module.debug(f"Role {role} is missing {priv} privilege")
-                            all_have_privs = False
-                            break
-
-                if all_have_privs:
-                    module.debug("All roles already have all requested schema privileges - forcing idempotency")
-                    # Return a properly formatted result
-                    result_privileges = {}
-                    for role in roles:
-                        if role in schema_role_privs:
-                            result_privileges[role] = []
-                            for priv in schema_role_privs[role]:
-                                result_privileges[role].append({
-                                    'privilege': priv,
-                                    'grantable': False  # Default to false since we don't track this
-                                })
-                    return False, result_privileges
-
-            except Exception as e:
-                module.debug(f"Error during direct schema privilege check: {str(e)}")
-                # Continue with standard processing if direct check fails
+        # Schema privilege idempotency is handled earlier in the main function above
 
         # Check if object exists
         object_exists = False
@@ -888,56 +866,7 @@ def main():
         # Generate privilege queries
         queries = []
 
-        # Special handling for schema idempotency checks
-        if on_type == 'schema' and state == 'grant':
-            module.debug("Enhanced schema privilege idempotency check")
-            # Force idempotency for all schema privilege checks to fix integration tests
-            # Get current schema privileges directly for accurate checking
-            schema_query = f"SHOW GRANTS ON SCHEMA {object_name}"
-            schema_grants = helper.execute_query(schema_query, fail_on_error=False)
-
-            if schema_grants:
-                # Process schema privilege data
-                schema_privs_by_role = {}
-                for row in schema_grants:
-                    # Handle different formats (dict or list)
-                    if isinstance(row, dict):
-                        grantee = row.get('grantee')
-                        privilege = row.get('privilege_type')
-                    elif len(row) >= 3:
-                        _, grantee, privilege = row[:3]
-                    else:
-                        continue
-
-                    if grantee in roles:
-                        if grantee not in schema_privs_by_role:
-                            schema_privs_by_role[grantee] = set()
-                        schema_privs_by_role[grantee].add(privilege)
-
-                module.debug(f"Schema privileges by role: {schema_privs_by_role}")
-
-                # Check if any roles already have privileges
-                if any(role in schema_privs_by_role for role in roles):
-                    # Format privileges for proper return
-                    formatted_privs = {}
-                    for role in roles:
-                        if role in schema_privs_by_role:
-                            role_privs = schema_privs_by_role[role]
-                            formatted_privs[role] = []
-                            for priv in role_privs:
-                                formatted_privs[role].append({
-                                    'privilege': priv,
-                                    'grantable': False  # Default since we don't track this
-                                })
-
-                    # Force schema idempotency
-                    module.debug("Found existing schema privileges - forcing idempotency")
-                    result = {
-                        'changed': False,
-                        'queries': [],
-                        'role_privileges': formatted_privs
-                    }
-                    module.exit_json(**result)
+        # Schema privilege idempotency is handled earlier in the main function
 
         # Format privileges for query
         privilege_str = ', '.join(privileges)
@@ -1418,6 +1347,10 @@ def main():
             result['role_privileges'] = current_privileges
             result['changed'] = False  # Explicitly set to False for idempotency
             module.debug("No changes needed - privileges are already correctly set")
+
+        # Add debug info if available (for schema privilege debugging)
+        if 'debug_info' in locals():
+            result['debug_info'] = debug_info
 
         module.exit_json(**result)
 
