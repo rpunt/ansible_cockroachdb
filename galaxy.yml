@@ -1,12 +1,10 @@
-namespace: cockroach_labs
+namespace: rpunt
 name: cockroachdb
 version: 1.0.0
 readme: README.md
 authors:
   - Ryan Punt @rpunt
 description: Ansible collection for managing CockroachDB
-license:
-  - Apache-2.0
 license_file: LICENSE
 tags:
   - database

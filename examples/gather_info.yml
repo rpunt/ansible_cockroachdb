@@ -2,7 +2,7 @@
 # Example playbook for gathering CockroachDB cluster information
 - name: Gather CockroachDB information
   hosts: cockroachdb_servers
-  gather_facts: no
+  gather_facts: false
   vars:
     cockroach_ssl_cert: "/path/to/client.crt"
     cockroach_ssl_key: "/path/to/client.key"
@@ -23,15 +23,15 @@
       register: crdb_info
 
     - name: Display cluster information
-      debug:
+      ansible.builtin.debug:
         var: crdb_info.cluster
 
     - name: Display databases
-      debug:
+      ansible.builtin.debug:
         var: crdb_info.databases
 
     - name: Display database sizes
-      debug:
+      ansible.builtin.debug:
         var: crdb_info.sizes.databases
 
     - name: Gather detailed information about production database
@@ -48,12 +48,13 @@
       when: "'production' in crdb_info.databases"
 
     - name: Display production database tables
-      debug:
+      ansible.builtin.debug:
         var: production_info.tables.production
       when: "'production' in crdb_info.databases"
 
     - name: Generate HTML report of database information
-      template:
+      ansible.builtin.template:
         src: templates/cockroachdb_report.html.j2
         dest: /tmp/cockroachdb_report.html
+        mode: '0644'
       delegate_to: localhost

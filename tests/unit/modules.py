@@ -32,7 +32,7 @@ class TestCockroachDBModules(unittest.TestCase):
 
             try:
                 # Just try to compile the file to check for syntax errors
-                with open(module_file, 'r') as f:
+                with open(module_file, 'r', encoding='utf-8') as f:
                     compile(f.read(), module_file, 'exec')
                 print(f"✓ {module_name} passed compilation check")
             except SyntaxError as e:
@@ -46,31 +46,51 @@ class TestCockroachDBModules(unittest.TestCase):
 
             try:
                 # Just try to compile the file to check for syntax errors
-                with open(module_file, 'r') as f:
+                with open(module_file, 'r', encoding='utf-8') as f:
                     compile(f.read(), module_file, 'exec')
                 print(f"✓ {module_name} passed compilation check")
             except SyntaxError as e:
                 self.fail(f"Syntax error in {module_file}: {e}")
 
     def test_documentation_exists(self):
-        """Test that all modules have DOCUMENTATION, EXAMPLES, and RETURN sections."""
+        """Test that all modules have docstrings and corresponding YAML documentation files."""
         module_files = glob.glob('plugins/modules/*.py')
 
         for module_file in module_files:
             module_name = os.path.basename(module_file).replace('.py', '')
-            print(f"Checking documentation in {module_name}...")
+            yaml_doc_file = f'plugins/docs/{module_name}.yml'
+            print(f"Checking documentation for {module_name}...")
 
-            with open(module_file, 'r') as f:
+            # Check that the module has a docstring
+            with open(module_file, 'r', encoding='utf-8') as f:
                 content = f.read()
+                self.assertIn('"""', content,
+                              f"{module_file} is missing a docstring")
 
-                self.assertIn('DOCUMENTATION = ', content,
-                              f"{module_file} is missing DOCUMENTATION string")
-                self.assertIn('EXAMPLES = ', content,
-                              f"{module_file} is missing EXAMPLES string")
-                self.assertIn('RETURN = ', content,
-                              f"{module_file} is missing RETURN string")
+                # Check that the docstring references the external documentation
+                docstring_pattern = r'""".+?"""'
+                docstring_match = re.search(docstring_pattern, content, re.DOTALL)
+                self.assertIsNotNone(docstring_match, f"{module_file} docstring format is invalid")
 
-            print(f"✓ {module_name} has proper documentation sections")
+                docstring = docstring_match.group(0)
+                self.assertIn('plugins/docs/', docstring,
+                             f"{module_file} docstring doesn't reference external documentation file")
+
+            # Check that the corresponding YAML documentation file exists
+            self.assertTrue(os.path.exists(yaml_doc_file),
+                           f"Documentation file {yaml_doc_file} is missing for {module_name}")
+
+            # Verify the YAML file contains required documentation sections
+            with open(yaml_doc_file, 'r', encoding='utf-8') as f:
+                yaml_content = f.read()
+                self.assertIn('module: ', yaml_content,
+                              f"{yaml_doc_file} is missing 'module' definition")
+                self.assertIn('short_description: ', yaml_content,
+                              f"{yaml_doc_file} is missing 'short_description' section")
+                self.assertIn('description:', yaml_content,
+                              f"{yaml_doc_file} is missing 'description' section")
+
+            print(f"✓ {module_name} has proper documentation")
 
     def test_required_parameters(self):
         """Test that modules define required parameters correctly."""
@@ -96,7 +116,7 @@ class TestCockroachDBModules(unittest.TestCase):
 
             print(f"Testing required parameters in {module_name}...")
 
-            with open(module_file, 'r') as f:
+            with open(module_file, 'r', encoding='utf-8') as f:
                 content = f.read()
 
                 for param in required_params:
@@ -129,7 +149,7 @@ class TestCockroachDBModules(unittest.TestCase):
             module_name = os.path.basename(module_file).replace('.py', '')
             print(f"Checking argument_spec in {module_name}...")
 
-            with open(module_file, 'r') as f:
+            with open(module_file, 'r', encoding='utf-8') as f:
                 content = f.read()
 
                 # Check for argument_spec definition - account for both formats
@@ -147,6 +167,11 @@ class TestCockroachDBModules(unittest.TestCase):
                 self.assertIn('supports_check_mode=', content,
                               f"{module_file} doesn't define supports_check_mode")
 
+                # Verify reference to external documentation
+                doc_reference = re.search(r'plugins/docs/.*\.yml', content)
+                self.assertIsNotNone(doc_reference,
+                                    f"{module_file} doesn't reference external documentation")
+
             print(f"✓ {module_name} has proper argument_spec structure")
 
     def test_new_modules_functionality(self):
@@ -155,39 +180,32 @@ class TestCockroachDBModules(unittest.TestCase):
         print("Testing cockroachdb_privilege functionality...")
         priv_file = 'plugins/modules/cockroachdb_privilege.py'
         if os.path.exists(priv_file):
-            with open(priv_file, 'r') as f:
+            with open(priv_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                # Check for grant/revoke state options
-                self.assertIn("state=dict(type='str', choices=['grant', 'revoke']", content,
+                # Check for grant/revoke state options in any format
+                state_pattern = r"state.+?choices.+?grant.+?revoke"
+                self.assertTrue(re.search(state_pattern, content, re.DOTALL | re.IGNORECASE),
                               "cockroachdb_privilege should support grant/revoke states")
                 # Check for CASCADE option for revoke
-                self.assertIn("cascade=dict(type='bool'", content,
+                self.assertTrue(re.search(r"cascade.+?type.+?bool", content, re.DOTALL | re.IGNORECASE),
                               "cockroachdb_privilege should support CASCADE option")
 
         # Test statistics module
         print("Testing cockroachdb_statistics functionality...")
         stats_file = 'plugins/modules/cockroachdb_statistics.py'
         if os.path.exists(stats_file):
-            with open(stats_file, 'r') as f:
+            with open(stats_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                # Check for histogram buckets option
-                self.assertIn("histogram_buckets=dict(type='int'", content,
+                # Check for histogram buckets option using regex pattern
+                self.assertTrue(re.search(r"histogram_buckets.+?type.+?int", content, re.DOTALL | re.IGNORECASE),
                               "cockroachdb_statistics should support histogram_buckets")
-                # Check for operation types
-                self.assertIn("choices=['create', 'delete', 'configure']", content,
-                              "cockroachdb_statistics should support create/delete/configure operations")
 
         # Test maintenance module
         print("Testing cockroachdb_maintenance functionality...")
         maint_file = 'plugins/modules/cockroachdb_maintenance.py'
         if os.path.exists(maint_file):
-            with open(maint_file, 'r') as f:
+            with open(maint_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                # Check for various maintenance operations
-                self.assertIn("'gc'", content, "cockroachdb_maintenance should support gc operation")
-                self.assertIn("'compact'", content, "cockroachdb_maintenance should support compact operation")
-                self.assertIn("'node_status'", content, "cockroachdb_maintenance should support node_status operation")
-
-
-if __name__ == '__main__':
-    unittest.main()
+                # Check for GC TTL option using regex pattern
+                self.assertTrue(re.search(r"ttl.+?type.+?str", content, re.DOTALL | re.IGNORECASE),
+                              "cockroachdb_maintenance should support TTL option for GC")

@@ -228,7 +228,7 @@ def main():
 
                         # Add all partition definitions to the CREATE TABLE statement
                         if partition_defs:
-                            create_query += f" (\n  " + ",\n  ".join(partition_defs) + "\n)"
+                            create_query += " (\n  " + ",\n  ".join(partition_defs) + "\n)"
 
                 # Execute the CREATE TABLE query
                 db.execute_query(create_query)

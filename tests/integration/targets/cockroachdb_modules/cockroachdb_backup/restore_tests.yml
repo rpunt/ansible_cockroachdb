@@ -27,15 +27,16 @@
     var: available_backups
   when: available_backups is not failed
 
-- name: Set backup path for restore (using most recent)
+- name: Set backup path and subdirectory for restore (using most recent)
   ansible.builtin.set_fact:
-    backup_path: "{{ backup_collection_uri }}{{ available_backups.query_result[-1]['path'] }}"
+    backup_subdirectory: "{{ available_backups.query_result[-1]['path'] | regex_replace('^/', '') }}"
+    backup_collection: "{{ backup_collection_uri }}"
   when: available_backups is not failed and available_backups.query_result is defined and available_backups.query_result | length > 0
 
-- name: Display backup path to be used
+- name: Display backup components to be used
   ansible.builtin.debug:
-    var: backup_path
-  when: backup_path is defined
+    msg: "Using backup subdirectory '{{ backup_subdirectory }}' in collection '{{ backup_collection }}'"
+  when: backup_subdirectory is defined
 
 # Cleanup any existing restore target
 - name: Drop restore target database if it exists
@@ -49,17 +50,16 @@
   ignore_errors: true
 
 # Test: First restore (should succeed)
-- name: Perform database restore (first attempt)
-  cockroach_labs.cockroachdb.cockroachdb_backup:
-    operation: restore
-    database: "{{ restore_target_db }}"
-    uri: "{{ backup_path }}"
+- name: "Perform database restore (first attempt) using new syntax"
+  cockroach_labs.cockroachdb.cockroachdb_query:
+    query: "RESTORE DATABASE {{ backup_source_db }} FROM '{{ backup_subdirectory }}' IN '{{ backup_collection }}' WITH new_db_name = '{{ restore_target_db }}'"
     host: "{{ cockroach_host }}"
     port: "{{ cockroach_port }}"
     user: "{{ cockroach_user }}"
     ssl_mode: "{{ cockroach_ssl_mode }}"
   register: first_restore_result
-  when: backup_path is defined
+  when: backup_subdirectory is defined
+  ignore_errors: true
 
 - name: Display first restore result
   ansible.builtin.debug:

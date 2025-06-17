@@ -226,7 +226,7 @@ EOF
             -e PYTHONUNBUFFERED=1 \
             -e ANSIBLE_STDOUT_CALLBACK=debug \
             -e ANSIBLE_PYTHON_INTERPRETER=/usr/local/bin/python3 \
-            -e ANSIBLE_COLLECTIONS_PATHS=/root/.ansible/collections \
+            -e ANSIBLE_COLLECTIONS_PATH=/root/.ansible/collections \
             -e PYTHONPATH=/collection:/root/.ansible/collections \
             -e ANSIBLE_MODULE_UTILS=/collection/plugins/module_utils \
             -e ANSIBLE_CONFIG=/collection/ansible.cfg \
