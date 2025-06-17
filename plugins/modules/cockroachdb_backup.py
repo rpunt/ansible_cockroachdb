@@ -1,216 +1,35 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for managing CockroachDB backups and restores.
+
+This module allows you to:
+- Create full and incremental backups of CockroachDB databases and tables
+- Restore databases from previously created backups
+- List available backups in a storage location (S3, GCS, Azure, or local filesystem)
+
+CockroachDB's backup system provides a reliable way to protect your data
+with minimal impact on cluster performance. Backups can be encrypted,
+incremental, and stored in various cloud storage providers.
+
+For full documentation, see the plugins/docs/cockroachdb_backup.yml file
+"""
+
+# import sys
+# import time
+from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.cockroachdb import CockroachDBHelper
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
     "status": ["preview"],
     "supported_by": "cockroach_labs",
 }
-
-DOCUMENTATION = '''
----
-module: cockroachdb_backup
-short_description: Backup and restore CockroachDB databases
-description:
-  - Create backups of CockroachDB databases or restore from backups
-options:
-  operation:
-    description:
-      - Type of operation to perform
-    required: true
-    choices: [ "backup", "restore", "list" ]
-    type: str
-  database:
-    description:
-      - Database to backup or restore
-    type: str
-  table:
-    description:
-      - Specific table to backup (optional, backs up the entire database if not specified)
-    type: str
-  uri:
-    description:
-      - URI to store backup or restore from (e.g., 's3://bucket/path', 'gs://bucket/path', 'azure://container/path', or 'nodelocal://1/path')
-    required: false
-    type: str
-  options:
-    description:
-      - Additional options for the backup or restore operation
-    type: dict
-    suboptions:
-      as_of_timestamp:
-        description:
-          - Timestamp as of which to take the backup
-        type: str
-      incremental_from:
-        description:
-          - List of previous backups for incremental backup
-        type: list
-        elements: str
-      kms_uri:
-        description:
-          - URI for the KMS used to encrypt backups
-        type: str
-      encryption_passphrase:
-        description:
-          - Passphrase for encryption/decryption of backups
-        type: str
-        no_log: true
-      detached:
-        description:
-          - Whether the BACKUP command will return immediately after starting the backup job
-        type: bool
-        default: false
-  host:
-    description:
-      - Database host address
-    default: localhost
-    type: str
-  port:
-    description:
-      - Database port number
-    default: 26257
-    type: int
-  user:
-    description:
-      - Database username
-    default: root
-    type: str
-  password:
-    description:
-      - Database user password
-    type: str
-  ssl_mode:
-    description:
-      - SSL connection mode
-    default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
-    type: str
-  ssl_cert:
-    description:
-      - Path to client certificate file
-    type: path
-  ssl_key:
-    description:
-      - Path to client private key file
-    type: path
-  ssl_rootcert:
-    description:
-      - Path to CA certificate file
-    type: path
-  timeout:
-    description:
-      - Timeout for backup/restore operation in seconds
-    type: int
-    default: 600
-requirements:
-  - psycopg2
-author:
-  - "Your Name (@yourgithub)"
-'''
-
-EXAMPLES = '''
-# Create a full database backup to AWS S3
-- name: Backup database to S3
-  cockroachdb_backup:
-    operation: backup
-    database: production
-    uri: 's3://my-bucket/backups/production/?AWS_ACCESS_KEY_ID=EXAMPLEKEY&AWS_SECRET_ACCESS_KEY=EXAMPLESECRET'
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-    options:
-      encryption_passphrase: 'secure_passphrase'
-
-# Create an incremental backup
-- name: Create incremental backup
-  cockroachdb_backup:
-    operation: backup
-    database: production
-    uri: 's3://my-bucket/backups/production/incremental-{{ ansible_date_time.iso8601 }}/'
-    options:
-      incremental_from:
-        - 's3://my-bucket/backups/production/base/'
-      encryption_passphrase: 'secure_passphrase'
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-
-# Restore database from backup
-- name: Restore database from backup
-  cockroachdb_backup:
-    operation: restore
-    database: production
-    uri: 's3://my-bucket/backups/production/latest/'
-    options:
-      encryption_passphrase: 'secure_passphrase'
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-
-# List available backups at a location
-- name: List backups
-  cockroachdb_backup:
-    operation: list
-    uri: 's3://my-bucket/backups/production/'
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-  register: backup_list
-'''
-
-RETURN = '''
-changed:
-  description: Whether the operation resulted in a change
-  returned: always
-  type: bool
-operation:
-  description: Operation performed (backup, restore, list)
-  returned: always
-  type: str
-  sample: "backup"
-database:
-  description: Database name
-  returned: for backup and restore operations
-  type: str
-  sample: "production"
-uri:
-  description: URI used for backup or restore
-  returned: for all operations
-  type: str
-  sample: "s3://my-bucket/backups/production/"
-job_id:
-  description: ID of the backup or restore job
-  returned: for backup and restore operations when detached=true
-  type: str
-  sample: "123e4567-e89b-12d3-a456-426614174000"
-backups:
-  description: List of available backups
-  returned: for list operation
-  type: list
-  sample: ['s3://my-bucket/backups/production/2025-06-01/', 's3://my-bucket/backups/production/2025-06-02/']
-'''
-
-import sys
-import time
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
-
 
 def main():
     module_args = dict(

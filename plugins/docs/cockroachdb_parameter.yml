@@ -1,0 +1,218 @@
+---
+module: cockroachdb_parameter
+short_description: Manage CockroachDB cluster parameters
+description:
+  - Manage multiple cluster parameters at once
+  - Set, update, or reset cluster parameters
+  - Apply parameter profiles for specific workloads
+  - Smart handling for byte size units (KiB, MiB, GiB, TiB) ensures idempotent operations
+options:
+  parameters:
+    description:
+      - Dictionary of parameter names and their values to set
+      - Use null/None as value to reset a parameter to default
+    type: dict
+  profile:
+    description:
+      - Apply a predefined parameter profile for specific workload types
+      - Setting a profile will apply a group of recommended parameter values at once
+      - Can be one of the built-in profiles or a custom profile name defined in custom_profiles
+      - "Built-in profiles: oltp, olap, hybrid, low_latency, high_throughput, web_application, batch_processing"
+    type: str
+  custom_profiles:
+    description:
+      - Dictionary of custom parameter profiles that can be referenced by the profile parameter
+      - Each key is a profile name, and the value is a dictionary of parameter names and values
+      - Custom profiles can override or extend the built-in profiles
+      - "Example: { 'my_profile': { 'kv.rangefeed.enabled': true, 'sql.defaults.distsql': 'on' } }"
+    type: dict
+    default: {}
+  scope:
+    description:
+      - Scope for the parameters (cluster or session)
+    type: str
+    default: 'cluster'
+    choices: ['cluster', 'session']
+  reset_all:
+    description:
+      - Reset all session or cluster parameters to default
+      - USE WITH CAUTION - this will reset ALL settings, including critical ones
+    type: bool
+    default: false
+  host:
+    description:
+      - Database host address
+    default: localhost
+    type: str
+  port:
+    description:
+      - Database port number
+    default: 26257
+    type: int
+  user:
+    description:
+      - Database username
+    default: root
+    type: str
+  password:
+    description:
+      - Database user password
+    type: str
+  ssl_mode:
+    description:
+      - SSL connection mode
+    default: verify-full
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
+    type: str
+  ssl_cert:
+    description:
+      - Path to client certificate file
+    type: path
+  ssl_key:
+    description:
+      - Path to client private key file
+    type: path
+  ssl_rootcert:
+    description:
+      - Path to CA certificate file
+    type: path
+requirements:
+  - psycopg2
+author:
+  - "Ryan Punt (@rpunt)"
+
+
+examples: |
+  # Set multiple cluster parameters
+  - name: Configure multiple cluster parameters
+    cockroachdb_parameter:
+      parameters:
+        sql.defaults.distsql: "on"
+        sql.distsql.distribute_index_joins: "on"
+        kv.range_merge.queue_enabled: true
+        sql.defaults.optimizer: "on"
+      host: localhost
+      port: 26257
+      user: root
+      ssl_cert: /path/to/client.crt
+      ssl_key: /path/to/client.key
+      ssl_rootcert: /path/to/ca.crt
+
+  # Apply an OLTP optimization profile
+  - name: Apply OLTP optimization profile
+    cockroachdb_parameter:
+      profile: oltp
+      host: localhost
+      port: 26257
+      user: root
+      ssl_cert: /path/to/client.crt
+      ssl_key: /path/to/client.key
+      ssl_rootcert: /path/to/ca.crt
+
+  # Apply an OLAP/Analytical workload profile
+  - name: Apply OLAP optimization profile for analytics
+    cockroachdb_parameter:
+      profile: olap
+      host: localhost
+      port: 26257
+      user: root
+      ssl_cert: /path/to/client.crt
+      ssl_key: /path/to/client.key
+      ssl_rootcert: /path/to/ca.crt
+
+  # Use custom parameter profiles
+  - name: Apply custom parameter profile
+    cockroachdb_parameter:
+      profile: my_custom_profile
+      custom_profiles:
+        my_custom_profile:
+          sql.defaults.distsql: "on"
+          kv.rangefeed.enabled: true
+          server.time_until_store_dead: "3m"
+          kv.closed_timestamp.target_duration: "500ms"
+        production_tuned:
+          sql.defaults.distsql: "on"
+          kv.snapshot_rebalance.max_rate: "128MiB"
+          kv.bulk_io_write.max_rate: "1GiB"
+      host: localhost
+      port: 26257
+      user: root
+
+  # Combine custom profiles with additional parameters
+  - name: Apply custom profile and override specific parameters
+    cockroachdb_parameter:
+      profile: production_tuned
+      custom_profiles:
+        production_tuned:
+          sql.defaults.distsql: "on"
+          kv.snapshot_rebalance.max_rate: "64MiB"
+      parameters:
+        # These will be applied after the profile
+        server.web_session_timeout: "4h"
+      host: localhost
+      port: 26257
+      user: root
+
+  # Reset a parameter to default
+  - name: Reset parameter to default
+    cockroachdb_parameter:
+      parameters:
+        sql.defaults.distsql: null
+      host: localhost
+      port: 26257
+      user: root
+
+  # Set session parameters
+  - name: Set session parameters
+    cockroachdb_parameter:
+      parameters:
+        application_name: "ansible-deployment"
+        statement_timeout: "10s"
+        idle_in_transaction_session_timeout: "60s"
+      scope: session
+      host: localhost
+      port: 26257
+      user: root
+
+
+return_values:
+  changed:
+    description: Whether any parameters were changed
+    returned: always
+    type: bool
+    sample: true
+  parameters:
+    description: Parameters that were changed
+    returned: always
+    type: dict
+    sample: {"sql.defaults.distsql": "on", "kv.rangefeed.enabled": true}
+  profile:
+    description: Parameter profile that was applied
+    returned: when profile is specified
+    type: str
+    sample: "oltp"
+  custom_profile_used:
+    description: Whether a custom profile was used (vs built-in profile)
+    returned: when custom profile is applied
+    type: bool
+    sample: true
+  available_custom_profiles:
+    description: List of custom profile names that were provided
+    returned: when custom_profiles parameter is provided
+    type: list
+    sample: ["my_profile", "production_tuned"]
+  reset:
+    description: List of parameters that were reset to default values
+    returned: when parameters are reset
+    type: list
+    sample: ["sql.defaults.distsql", "kv.rangefeed.enabled"]
+  reset_all:
+    description: Whether all parameters were reset
+    returned: when reset_all is true
+    type: bool
+    sample: true
+  debug:
+    description: Debug information to help with troubleshooting
+    returned: always
+    type: dict
+    sample: {"requested_parameters": {"sql.defaults.distsql": "on"}, "profile_used": null, "scope": "cluster", "reset_all": false}

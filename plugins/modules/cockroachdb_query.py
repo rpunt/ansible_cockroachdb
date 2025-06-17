@@ -1,226 +1,30 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for executing SQL queries against a CockroachDB database.
+
+This module allows running SQL statements, SQL scripts, or queries from files
+against a CockroachDB database with support for positional and named parameters.
+Results from queries are returned in a structured format for further processing.
+
+The documentation for this module is maintained in the plugins/docs/cockroachdb_query.yml file.
+"""
+
+import os
+from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.cockroachdb import CockroachDBHelper
+
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
     "status": ["preview"],
     "supported_by": "cockroach_labs",
 }
-
-DOCUMENTATION = '''
----
-module: cockroachdb_query
-short_description: Execute SQL queries against a CockroachDB database
-description:
-  - Execute arbitrary SQL queries against a CockroachDB database
-  - For simple statements that don't return data, use I(query). For complex queries that return data, use I(query_file) or I(script).
-options:
-  query:
-    description:
-      - SQL query or statement to execute
-    type: str
-  query_file:
-    description:
-      - Path to a file containing SQL statements
-      - Statements must be separated by semicolons
-    type: path
-  script:
-    description:
-      - Multi-line SQL script to execute
-      - Statements must be separated by semicolons
-    type: str
-  database:
-    description:
-      - Database to connect to
-    type: str
-    required: true
-  positional_args:
-    description:
-      - List of positional arguments for the query
-      - These arguments replace $1, $2, etc. in the query
-    type: list
-    elements: raw
-  named_args:
-    description:
-      - Dictionary of named arguments for the query
-      - These arguments replace %(name)s style parameters in the query
-    type: dict
-  autocommit:
-    description:
-      - Whether to use autocommit mode
-      - When False, the module will execute the query in an explicit transaction
-    type: bool
-    default: true
-  host:
-    description:
-      - Database host address
-    default: localhost
-    type: str
-  port:
-    description:
-      - Database port number
-    default: 26257
-    type: int
-  user:
-    description:
-      - Database username
-    default: root
-    type: str
-  password:
-    description:
-      - Database user password
-    type: str
-  ssl_mode:
-    description:
-      - SSL connection mode
-    default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
-    type: str
-  ssl_cert:
-    description:
-      - Path to client certificate file
-    type: path
-  ssl_key:
-    description:
-      - Path to client private key file
-    type: path
-  ssl_rootcert:
-    description:
-      - Path to CA certificate file
-    type: path
-requirements:
-  - psycopg2
-author:
-  - "Your Name (@yourgithub)"
-'''
-
-EXAMPLES = '''
-# Execute a simple query
-- name: Create an index
-  cockroachdb_query:
-    query: "CREATE INDEX idx_users_email ON users(email)"
-    database: myapp
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-
-# Execute a query with parameters
-- name: Insert a user
-  cockroachdb_query:
-    query: "INSERT INTO users(username, email) VALUES($1, $2)"
-    positional_args:
-      - "johndoe"
-      - "john.doe@example.com"
-    database: myapp
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-
-# Execute a query with named parameters
-- name: Insert a user with named parameters
-  cockroachdb_query:
-    query: "INSERT INTO users(username, email) VALUES(%(username)s, %(email)s)"
-    named_args:
-      username: "johndoe"
-      email: "john.doe@example.com"
-    database: myapp
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-
-# Execute a query and register the result
-- name: Fetch active users
-  cockroachdb_query:
-    query: "SELECT id, username, email FROM users WHERE active = true"
-    database: myapp
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-  register: active_users
-
-# Execute a multi-line script
-- name: Execute a script
-  cockroachdb_query:
-    script: |
-      CREATE TABLE IF NOT EXISTS products (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          name STRING NOT NULL,
-          price DECIMAL NOT NULL,
-          created_at TIMESTAMP DEFAULT now()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
-
-      INSERT INTO products(name, price) VALUES('Widget', 19.99);
-    database: myapp
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-
-# Execute a query from a file
-- name: Execute a query from a file
-  cockroachdb_query:
-    query_file: /path/to/init_schema.sql
-    database: myapp
-    host: localhost
-    port: 26257
-    user: root
-    ssl_cert: /path/to/client.crt
-    ssl_key: /path/to/client.key
-    ssl_rootcert: /path/to/ca.crt
-'''
-
-RETURN = '''
-changed:
-  description: Whether the query caused a change
-  returned: always
-  type: bool
-  sample: true
-query:
-  description: The executed query or a description of it
-  returned: always
-  type: str
-  sample: "CREATE INDEX idx_users_email ON users(email)"
-rowcount:
-  description: Number of rows affected by the query
-  returned: always
-  type: int
-  sample: 5
-query_result:
-  description: List of dictionaries representing the query results
-  returned: when the query returns rows
-  type: list
-  elements: dict
-  sample: [{"id": "d0d5e6fc-5044-4a72-94b0-64c8380a0a58", "username": "johndoe", "email": "john.doe@example.com"}]
-statusmessage:
-  description: Status message returned by the database driver
-  returned: always
-  type: str
-  sample: "CREATE INDEX"
-'''
-
-import os
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
-
 
 def main():
     module_args = dict(

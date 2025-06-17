@@ -1,212 +1,18 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
 
-ANSIBLE_METADATA = {
-    "metadata_version": "1.1",
-    "status": ["preview"],
-    "supported_by": "cockroach_labs",
-}
-
-DOCUMENTATION = """
----
-module: cockroachdb_privilege
-short_description: Manage CockroachDB privileges
-description:
-  - Grant or revoke fine-grained privileges on CockroachDB objects
-  - Supports databases, tables, schemas, and other object types
-  - Manage privileges at column level for tables
-options:
-  state:
-    description:
-      - Whether to grant or revoke the privileges
-    required: true
-    choices: [ "grant", "revoke" ]
-    type: str
-  privileges:
-    description:
-      - List of privileges to grant or revoke
-      - Use 'ALL' for all privileges
-      - Specific privileges include SELECT, INSERT, UPDATE, DELETE,
-        CREATE, DROP, USAGE, etc.
-      - Note: Column-level privileges are not supported in CockroachDB
-    type: list
-    elements: str
-    required: true
-  on_type:
-    description:
-      - Type of object to grant/revoke privileges on
-    required: true
-    choices: [ "database", "schema", "table", "sequence", "view", "function", "type", "language" ]
-    type: str
-  object_name:
-    description:
-      - Name of the object to grant/revoke privileges on
-    required: true
-    type: str
-  schema:
-    description:
-      - Schema name, required for non-database objects
-    type: str
-    required: false
-  database:
-    description:
-      - Database name where the object is located
-      - Required for all object types
-    required: true
-    type: str
-  roles:
-    description:
-      - List of roles/users to grant or revoke privileges for
-    required: true
-    type: list
-    elements: str
-  with_grant_option:
-    description:
-      - Whether to grant the privilege with GRANT OPTION
-      - Allows the grantee to grant the same privileges to others
-    type: bool
-    default: false
-  cascade:
-    description:
-      - When revoking privileges with grant option, also revoke privileges granted by the target role
-    type: bool
-    default: false
-  host:
-    description:
-      - Database host address
-    default: localhost
-    type: str
-  port:
-    description:
-      - Database port number
-    default: 26257
-    type: int
-  user:
-    description:
-      - Database username
-    default: root
-    type: str
-  password:
-    description:
-      - Database user password
-    type: str
-  ssl_mode:
-    description:
-      - SSL connection mode
-    default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
-    type: str
-  ssl_cert:
-    description:
-      - Path to client certificate file
-    type: str
-  ssl_key:
-    description:
-      - Path to client private key file
-    type: str
-  ssl_rootcert:
-    description:
-      - Path to CA certificate file
-    type: str
-  connect_timeout:
-    description:
-      - Database connection timeout in seconds
-    default: 30
-    type: int
-requirements:
-  - psycopg2
-author:
-  - Your Name (@yourgithub)
 """
+Ansible module for managing privileges in CockroachDB.
 
-EXAMPLES = """
-# Grant SELECT, INSERT privileges on a table
-- name: Grant table privileges
-  cockroachdb_privilege:
-    state: grant
-    privileges:
-      - SELECT
-      - INSERT
-    on_type: table
-    object_name: users
-    database: my_database
-    schema: public
-    roles:
-      - readonly_user
-      - app_user
+This module allows granting and revoking privileges on CockroachDB objects
+such as databases, schemas, tables, sequences, and views for specific roles.
+It supports both object-level and column-level privileges.
 
-# Grant UPDATE privilege on a table
-- name: Grant UPDATE privilege on a table
-  cockroachdb_privilege:
-    state: grant
-    privileges:
-      - UPDATE
-      - SELECT
-    on_type: table
-    object_name: users
-    database: my_database
-    schema: public
-    roles:
-      - profile_editor
-
-# Grant ALL privileges with GRANT OPTION
-- name: Grant all privileges with grant option
-  cockroachdb_privilege:
-    state: grant
-    privileges:
-      - ALL
-    on_type: database
-    object_name: analytics
-    database: analytics
-    roles:
-      - analytics_admin
-    with_grant_option: true
-
-# Revoke privileges with cascade
-- name: Revoke privileges with cascade
-  cockroachdb_privilege:
-    state: revoke
-    privileges:
-      - CREATE
-      - DROP
-    on_type: database
-    object_name: production
-    database: production
-    roles:
-      - dev_user
-    cascade: true
-"""
-
-RETURN = """
-changed:
-  description: Whether any privilege changes were made
-  returned: always
-  type: bool
-  sample: true
-queries:
-  description: List of executed queries for privilege management
-  returned: always
-  type: list
-  sample: ['GRANT SELECT, INSERT ON TABLE public.users TO readonly_user, app_user']
-role_privileges:
-  description: Dictionary of roles and their current privileges after changes
-  returned: success
-  type: dict
-  sample: {
-    "readonly_user": {
-      "tables": {
-        "public.users": ["SELECT"]
-      }
-    },
-    "app_user": {
-      "tables": {
-        "public.users": ["SELECT", "INSERT"]
-      }
-    }
-  }
+The documentation for this module is maintained in the plugins/docs/cockroachdb_privilege.yml file.
 """
 
 import re
@@ -218,6 +24,11 @@ from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroa
     COCKROACHDB_IMP_ERR,
 )
 
+ANSIBLE_METADATA = {
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "cockroach_labs",
+}
 
 def check_privileges_changes(
     module,

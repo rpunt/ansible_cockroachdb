@@ -1,0 +1,217 @@
+---
+module: cockroachdb_statistics
+short_description: Manage CockroachDB statistics collection
+description:
+  - Create, update, or delete statistics for CockroachDB query optimization
+  - Control when and how statistics are collected
+  - Configure automatic statistics collection settings
+options:
+  database:
+    description:
+      - Database name where statistics should be collected
+    required: true
+    type: str
+  schema:
+    description:
+      - Schema name to collect statistics for
+      - Default is 'public'
+    type: str
+    default: 'public'
+  table:
+    description:
+      - Table name to collect statistics for
+      - If not specified, statistics for all tables in the schema will be collected
+    type: str
+  columns:
+    description:
+      - List of column names to collect statistics for
+      - If not specified, statistics for all columns will be collected
+    type: list
+    elements: str
+  operation:
+    description:
+      - Operation to perform on statistics
+    choices: ["create", "delete", "configure"]
+    default: "create"
+    type: str
+  options:
+    description:
+      - Options for statistics collection
+    type: dict
+    suboptions:
+      as_of_time:
+        description:
+          - Collect statistics as of a specific timestamp
+          - Format can be a timestamp string or relative time like '10s ago'
+        type: str
+      throttling:
+        description:
+          - Control CPU usage during statistics collection
+          - Value between 0.0 and 1.0, where 0.0 means minimum impact on cluster
+            and 1.0 means maximum speed regardless of impact
+        type: float
+      histogram_buckets:
+        description:
+          - Number of histogram buckets to create for column statistics
+        type: int
+  auto_stats:
+    description:
+      - Configuration for automatic statistics collection
+    type: dict
+    suboptions:
+      enabled:
+        description:
+          - Whether automatic statistics collection is enabled
+        type: bool
+      fraction:
+        description:
+          - Target fraction of stale rows to trigger statistics refresh (0.0-1.0)
+        type: float
+      min_rows_threshold:
+        description:
+          - Minimum number of rows a table must have for automatic stats collection
+        type: int
+      min_stale_rows:
+        description:
+          - Minimum number of rows that must be stale before stats are refreshed
+        type: int
+  host:
+    description:
+      - Database host address
+    default: localhost
+    type: str
+  port:
+    description:
+      - Database port number
+    default: 26257
+    type: int
+  user:
+    description:
+      - Database username
+    default: root
+    type: str
+  password:
+    description:
+      - Database user password
+    type: str
+  ssl_mode:
+    description:
+      - SSL connection mode
+    default: verify-full
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
+    type: str
+  ssl_cert:
+    description:
+      - Path to client certificate file
+    type: str
+  ssl_key:
+    description:
+      - Path to client private key file
+    type: str
+  ssl_rootcert:
+    description:
+      - Path to CA certificate file
+    type: str
+  connect_timeout:
+    description:
+      - Database connection timeout in seconds
+    default: 30
+    type: int
+requirements:
+  - psycopg2
+author:
+  - "Ryan Punt (@rpunt)"
+
+
+examples: |
+  # Create statistics for all columns in a table
+  - name: Create statistics for users table
+    cockroachdb_statistics:
+      database: my_database
+      table: users
+      operation: create
+
+  # Create statistics for specific columns
+  - name: Create statistics for specific columns
+    cockroachdb_statistics:
+      database: my_database
+      table: orders
+      columns:
+        - customer_id
+        - order_date
+        - status
+      operation: create
+
+  # Create statistics with throttling to minimize cluster impact
+  - name: Create statistics with throttling
+    cockroachdb_statistics:
+      database: production_db
+      table: large_table
+      operation: create
+      options:
+        throttling: 0.3
+
+  # Create statistics with histogram buckets for better cardinality estimates
+  - name: Create detailed histogram statistics
+    cockroachdb_statistics:
+      database: analytics
+      table: events
+      columns:
+        - event_type
+        - timestamp
+      operation: create
+      options:
+        histogram_buckets: 200
+
+  # Delete statistics for a table
+  - name: Delete statistics
+    cockroachdb_statistics:
+      database: my_database
+      table: deprecated_table
+      operation: delete
+
+  # Configure automatic statistics collection
+  - name: Configure automatic statistics collection
+    cockroachdb_statistics:
+      database: my_database
+      operation: configure
+      auto_stats:
+        enabled: true
+        fraction: 0.2
+        min_rows_threshold: 1000
+        min_stale_rows: 500
+
+
+return_values:
+  changed:
+    description: Whether any changes were made
+    returned: always
+    type: bool
+    sample: true
+  queries:
+    description: List of executed queries
+    returned: always
+    type: list
+    sample: ["CREATE STATISTICS stats_users_email ON email FROM users"]
+  tables:
+    description: List of tables that had statistics created/deleted
+    returned: when operation is create or delete
+    type: list
+    sample: ["public.users", "public.orders"]
+  columns:
+    description: Dictionary of tables and their columns that had statistics created
+    returned: when operation is create and columns specified
+    type: dict
+    sample: {
+      "public.users": ["email", "username"],
+      "public.orders": ["order_date", "status"]
+    }
+  settings:
+    description: Dictionary of the automatic statistics settings after configuration
+    returned: when operation is configure
+    type: dict
+    sample: {
+      "sql.stats.automatic_collection.enabled": true,
+      "sql.stats.automatic_collection.fraction_stale_rows": 0.2,
+      "sql.stats.automatic_collection.min_rows_threshold": 1000
+    }

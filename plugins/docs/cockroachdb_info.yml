@@ -1,0 +1,286 @@
+---
+module: cockroachdb_info
+short_description: Get information about a CockroachDB cluster
+description:
+  - Retrieve information about a CockroachDB cluster, databases, and tables
+options:
+  gather_subset:
+    description:
+      - Specify which subset of information to gather
+    default:
+      - cluster
+      - databases
+      - sizes
+    type: list
+    elements: str
+    choices:
+      - cluster
+      - databases
+      - tables
+      - roles
+      - sizes
+      - settings
+      - indexes
+  database:
+    description:
+      - Restrict information gathering to a specific database
+    type: str
+  table:
+    description:
+      - Restrict information gathering to a specific table (requires database to be specified)
+    type: str
+  type:
+    description:
+      - Shorthand to gather specific type of information (alternative to gather_subset)
+    type: str
+    choices:
+      - cluster
+      - databases
+      - tables
+      - roles
+      - sizes
+      - settings
+      - indexes
+  host:
+    description:
+      - Database host address
+    default: localhost
+    type: str
+  port:
+    description:
+      - Database port number
+    default: 26257
+    type: int
+  user:
+    description:
+      - Database username
+    default: root
+    type: str
+  password:
+    description:
+      - Database user password
+    type: str
+  ssl_mode:
+    description:
+      - SSL connection mode
+    default: verify-full
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
+    type: str
+  ssl_cert:
+    description:
+      - Path to client certificate file
+    type: path
+  ssl_key:
+    description:
+      - Path to client private key file
+    type: path
+  ssl_rootcert:
+    description:
+      - Path to CA certificate file
+    type: path
+requirements:
+  - psycopg2
+author:
+  - "Ryan Punt (@rpunt)"
+
+
+examples: |
+  # Get all available information about the CockroachDB cluster
+  - name: Gather all CockroachDB information
+    cockroachdb_info:
+      host: localhost
+      port: 26257
+      user: root
+      ssl_cert: /path/to/client.crt
+      ssl_key: /path/to/client.key
+      ssl_rootcert: /path/to/ca.crt
+    register: crdb_info
+
+  # Get cluster settings only
+  - name: Gather CockroachDB cluster settings
+    cockroachdb_info:
+      gather_subset: ['settings']
+      host: localhost
+      port: 26257
+      user: root
+      ssl_cert: /path/to/client.crt
+      ssl_key: /path/to/client.key
+      ssl_rootcert: /path/to/ca.crt
+    register: crdb_settings
+
+  # Get information about a specific database
+  - name: Gather information about production database
+    cockroachdb_info:
+      gather_subset: ['tables', 'sizes']
+      database: production
+      host: localhost
+      port: 26257
+      user: root
+      ssl_cert: /path/to/client.crt
+      ssl_key: /path/to/client.key
+      ssl_rootcert: /path/to/ca.crt
+    register: production_info
+
+
+return_values:
+  cluster:
+    description: Information about the CockroachDB cluster
+    returned: when gather_subset includes cluster
+    type: dict
+    contains:
+      version:
+        description: CockroachDB version
+        returned: always
+        type: str
+        sample: "22.1.6"
+      enterprise:
+        description: Whether this is an enterprise edition
+        returned: always
+        type: bool
+        sample: false
+      node_count:
+        description: Number of nodes in the cluster
+        returned: always
+        type: int
+        sample: 3
+      id:
+        description: Cluster ID
+        returned: always
+        type: str
+        sample: "8a2d7ae6-63d5-4788-aecb-feaed98a331d"
+  databases:
+    description: List of databases in the cluster
+    returned: when gather_subset includes databases
+    type: list
+    elements: str
+    sample: ["defaultdb", "postgres", "system", "production"]
+  tables:
+    description: List of tables by database
+    returned: when gather_subset includes tables
+    type: dict
+    contains:
+      database_name:
+        description: Tables in this database
+        type: list
+        elements: str
+        sample: ["users", "products", "orders"]
+  partitioned_tables:
+    description: Partitioning information for tables
+    returned: when gather_subset includes tables
+    type: dict
+    contains:
+      database_name:
+        description: Database containing partitioned tables
+        type: dict
+        contains:
+          table_name:
+            description: Partitioning details for the table
+            type: dict
+            contains:
+              partition_type:
+                description: Type of partitioning (HASH, LIST, RANGE)
+                type: str
+                sample: "LIST"
+              partition_columns:
+                description: Columns used for partitioning
+                type: list
+                elements: str
+                sample: ["region"]
+              partitions:
+                description: List of partitions
+                type: list
+                elements: dict
+                contains:
+                  name:
+                    description: Partition name
+                    type: str
+                    sample: "north_america"
+                  values:
+                    description: Partition values
+                    type: raw
+                    sample: ["US", "CA", "MX"]
+  indexes:
+    description: List of indexes by table in each database
+    returned: when gather_subset includes indexes or type=indexes
+    type: dict
+    contains:
+      database_name:
+        description: Database containing tables with indexes
+        type: dict
+        contains:
+          table_name:
+            description: Table containing the indexes
+            type: list
+            elements: dict
+            contains:
+              name:
+                description: Index name
+                type: str
+                sample: "idx_users_email"
+              is_unique:
+                description: Whether the index is unique
+                type: bool
+                sample: false
+              columns:
+                description: Columns included in the index
+                type: list
+                sample: ["email"]
+              storing:
+                description: Columns stored but not indexed
+                type: list
+                sample: ["last_login_date"]
+              index_type:
+                description: Type of index
+                type: str
+                sample: "BTREE"
+  roles:
+    description: List of roles in the cluster
+    returned: when gather_subset includes roles
+    type: list
+    elements: dict
+    contains:
+      name:
+        description: Role name
+        type: str
+        sample: "admin"
+      superuser:
+        description: Whether the role is a superuser
+        type: bool
+        sample: true
+      inherit:
+        description: Whether the role inherits privileges
+        type: bool
+        sample: true
+      can_login:
+        description: Whether the role can login
+        type: bool
+        sample: true
+      can_create_db:
+        description: Whether the role can create databases
+        type: bool
+        sample: false
+  sizes:
+    description: Size information for databases and tables
+    returned: when gather_subset includes sizes
+    type: dict
+    contains:
+      databases:
+        description: Size of each database in bytes
+        type: dict
+        sample: {"production": 1073741824, "defaultdb": 32768}
+      tables:
+        description: Size of each table in bytes by database
+        type: dict
+        contains:
+          database_name:
+            description: Tables in this database with their sizes
+            type: dict
+            sample: {"users": 524288, "products": 262144, "orders": 786432}
+  settings:
+    description: Cluster settings
+    returned: when gather_subset includes settings
+    type: dict
+    sample:
+      cluster.organization: "Acme Corp"
+      sql.defaults.distsql: "1"
+      server.time_until_store_dead: "5m0s"
