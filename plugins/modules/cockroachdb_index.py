@@ -26,21 +26,24 @@ automate their management as part of your infrastructure-as-code workflow.
 For full documentation, see the plugins/docs/cockroachdb_index.yml file
 """
 
-from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 from ansible.module_utils._text import to_native
+try:
+    from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+        CockroachDBHelper,
+        is_valid_identifier,
+        COCKROACHDB_IMP_ERR,
+        HAS_PSYCOPG2,
+    )
+except ImportError:
+    # This is handled in the module
+    pass
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
     "status": ["preview"],
     "supported_by": "cockroach_labs",
 }
-
-try:
-    from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroachdb import CockroachDBHelper, is_valid_identifier, COCKROACHDB_IMP_ERR, HAS_PSYCOPG2
-except ImportError:
-    # This is handled in the module
-    pass
-
 
 def main():
     argument_spec = dict(

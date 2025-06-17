@@ -20,20 +20,21 @@ import traceback
 import re
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils._text import to_native
+try:
+    from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+        CockroachDBHelper,
+        COCKROACHDB_IMP_ERR,
+        HAS_PSYCOPG2,
+    )
+except ImportError:
+    # This is handled in the module
+    pass
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
     "status": ["preview"],
     "supported_by": "cockroach_labs",
 }
-
-# For full documentation, see the plugins/docs/cockroachdb_parameter.yml file
-
-try:
-    from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroachdb import CockroachDBHelper, COCKROACHDB_IMP_ERR, HAS_PSYCOPG2
-except ImportError:
-    # This is handled in the module
-    pass
 
 # Helper function to normalize time duration strings or objects
 def normalize_duration(duration_val):

@@ -15,9 +15,9 @@ make better execution plan choices, resulting in faster queries.
 For full documentation, see the plugins/docs/cockroachdb_statistics.yml file
 """
 
-from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 from ansible.module_utils._text import to_native
-from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroachdb import (
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
     CockroachDBHelper,
     HAS_PSYCOPG2,
     COCKROACHDB_IMP_ERR,

@@ -17,7 +17,9 @@ The documentation for this module is maintained in the plugins/docs/cockroachdb_
 
 import os
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper
+)
 
 
 ANSIBLE_METADATA = {

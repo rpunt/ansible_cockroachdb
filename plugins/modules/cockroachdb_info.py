@@ -30,7 +30,13 @@ For full documentation, see the plugins/docs/cockroachdb_info.yml file
 
 import traceback
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
+try:
+    from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+        CockroachDBHelper
+    )
+except ImportError:
+    # This is handled in the module
+    pass
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",

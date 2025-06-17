@@ -24,7 +24,9 @@ For full documentation, see the plugins/docs/cockroachdb_db.yml file
 """
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper,
+)
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
