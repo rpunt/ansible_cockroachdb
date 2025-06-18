@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# pylint: disable=line-too-long, broad-exception-caught
+# pylint: disable=line-too-long, broad-exception-caught, too-many-lines
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
@@ -394,6 +394,13 @@ rebalance:
 """
 
 def main():
+    """
+    Main entry point for the cockroachdb_maintenance module.
+
+    This function handles various maintenance operations on a CockroachDB cluster,
+    including garbage collection, schema cleanup, node management, version upgrade checks,
+    query/session cancellation, job management, and zone configuration.
+    """
     argument_spec = dict(
         operation=dict(
             type='str',

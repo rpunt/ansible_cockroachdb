@@ -251,6 +251,12 @@ settings:
 """
 
 def main():
+    """
+    Main entry point for the cockroachdb_statistics module.
+
+    This function handles creating, deleting, and configuring statistics for CockroachDB
+    tables and columns to help the query optimizer make better plan choices.
+    """
     argument_spec = dict(
         database=dict(type='str', required=True),
         schema=dict(type='str', default='public'),
@@ -436,7 +442,7 @@ def main():
                 tables_to_process = [(schema, table)]
             else:
                 # If no table specified, get all tables in schema
-                tables_query = f"""
+                tables_query = """
                     SELECT table_name
                     FROM information_schema.tables
                     WHERE table_schema = %s
@@ -592,7 +598,7 @@ def main():
                 affected_tables.append(f"{schema}.{table}")
             else:
                 # If no table specified, get all tables in schema
-                tables_query = f"""
+                tables_query = """
                     SELECT table_name
                     FROM information_schema.tables
                     WHERE table_schema = %s

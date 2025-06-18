@@ -334,6 +334,13 @@ state:
 """
 
 def main():
+    """
+    Main entry point for the cockroachdb_table module.
+
+    This function handles the creation, modification, and removal of tables in a CockroachDB database.
+    It supports defining table structures with columns, data types, constraints, primary keys,
+    partitioning schemes, and other table options.
+    """
     module_args = dict(
         name=dict(type='str', required=True),
         database=dict(type='str', required=True),
@@ -384,7 +391,7 @@ def main():
     )
 
     name = module.params['name']
-    database = module.params['database']
+    _database = module.params['database']
     state = module.params['state']
     columns = module.params['columns']
     primary_key = module.params['primary_key']
@@ -486,7 +493,7 @@ def main():
                             if part_type == 'HASH':
                                 # For HASH partitioning, values represents the number of buckets
                                 if len(part_values) != 1:
-                                    module.fail_json(msg=f"HASH partitioning requires exactly one value (bucket count) per partition")
+                                    module.fail_json(msg="HASH partitioning requires exactly one value (bucket count) per partition")
                                 partition_defs.append(f"PARTITION {part_name} VALUES IN ({part_values[0]})")
 
                             elif part_type == 'LIST':
@@ -510,7 +517,7 @@ def main():
                             elif part_type == 'RANGE':
                                 # For RANGE partitioning, values should be pairs: [from_val, to_val]
                                 if len(part_values) != 2:
-                                    module.fail_json(msg=f"RANGE partitioning requires exactly two values per partition: [from_value, to_value]")
+                                    module.fail_json(msg="RANGE partitioning requires exactly two values per partition: [from_value, to_value]")
 
                                 # Format the range values
                                 from_vals = []

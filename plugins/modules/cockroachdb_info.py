@@ -334,6 +334,14 @@ settings:
 """
 
 def main():
+    """
+    Main entry point for the cockroachdb_info module.
+    
+    This function handles gathering information from a CockroachDB cluster based on
+    the specified information subsets. It can collect data about the cluster,
+    databases, tables, roles, sizes, settings, and indexes using read-only
+    operations to ensure no modifications to the cluster state.
+    """
     module_args = dict(
         gather_subset=dict(
             type='list',

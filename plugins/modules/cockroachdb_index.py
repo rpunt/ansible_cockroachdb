@@ -258,6 +258,29 @@ queries:
 
 
 def main():
+    """
+    Main entry point for the CockroachDB index management module.
+
+    This function handles the creation and deletion of indexes in CockroachDB tables.
+    It processes module parameters, validates inputs, connects to the cluster,
+    and performs the requested index operations in an idempotent manner.
+
+    Features:
+    - Create standard or unique indexes on database tables
+    - Support for column-based indexes or expression-based indexes
+    - Support for partial indexes with WHERE clauses
+    - Support for STORING additional columns in the index
+    - Drop existing indexes when no longer needed
+    - Concurrent index creation and deletion
+    - Idempotent operations with IF NOT EXISTS option
+
+    The function handles security by validating identifiers to prevent SQL injection
+    and checks for the existence of tables before attempting to create indexes.
+
+    Returns:
+        dict: Result object containing operation status, index details, and
+              the SQL queries executed during the operation
+    """
     argument_spec = dict(
         name=dict(type='str', required=True),
         database=dict(type='str', required=True),
@@ -349,9 +372,9 @@ def main():
                     query_parts.append("CONCURRENTLY")
 
                 if unique:
-                    query = f"CREATE UNIQUE INDEX"
+                    query = "CREATE UNIQUE INDEX"
                 else:
-                    query = f"CREATE INDEX"
+                    query = "CREATE INDEX"
 
                 if if_not_exists:
                     query += " IF NOT EXISTS"
@@ -383,7 +406,7 @@ def main():
         elif state == 'absent' and index_exists:
             if not module.check_mode:
                 # Drop index
-                query = f"DROP INDEX"
+                query = "DROP INDEX"
 
                 if concurrently:
                     query += " CONCURRENTLY"

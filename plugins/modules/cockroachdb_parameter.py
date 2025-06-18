@@ -482,6 +482,30 @@ PARAMETER_PROFILES = {
 
 
 def main():
+    """
+    Main entry point for the CockroachDB parameter management module.
+
+    This function handles configuration and tuning of CockroachDB parameters
+    at both the cluster and session level. It supports single parameter changes,
+    parameter profiles, and parameter resets in an idempotent way.
+
+    Features:
+    - Set individual cluster and session parameters
+    - Apply predefined parameter profiles for common use cases
+    - Apply custom parameter profiles defined in playbooks
+    - Reset individual parameters to default values
+    - Reset all parameters at once
+    - Intelligent parameter comparison based on data types
+    - Smart handling of duration and byte size values
+
+    The function ensures idempotent operation by intelligently comparing current
+    parameter values with requested values, including special handling for various
+    data types like durations, byte sizes, and booleans.
+
+    Returns:
+        dict: Result object containing changed parameters, profile information,
+              reset parameters, and debug information
+    """
     argument_spec = dict(
         parameters=dict(type='dict'),
         profile=dict(type='str'),  # Remove choices validation to allow custom profiles

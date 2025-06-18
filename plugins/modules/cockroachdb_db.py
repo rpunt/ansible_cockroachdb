@@ -143,6 +143,27 @@ changed:
 """
 
 def main():
+    """
+    Main entry point for the CockroachDB database management module.
+
+    This function handles the creation and deletion of CockroachDB databases.
+    It processes module parameters, validates inputs, connects to the cluster,
+    and performs the requested database operations in an idempotent manner.
+
+    Operations:
+    - Create a new database if it doesn't exist (state=present)
+    - Set database ownership when creating a new database
+    - Drop an existing database if it exists (state=absent)
+    - Check database existence without making changes (check_mode)
+
+    The function handles idempotent operations by checking if the database exists
+    before attempting to create or drop it, ensuring no unnecessary operations
+    are performed.
+
+    Returns:
+        dict: Result object containing operation status and database details
+              including the 'changed' status flag
+    """
     module_args = dict(
         name=dict(type='str', required=True),
         state=dict(type='str', default='present', choices=['present', 'absent']),

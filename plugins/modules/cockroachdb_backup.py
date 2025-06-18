@@ -236,6 +236,27 @@ backups:
 """
 
 def main():
+    """
+    Main entry point for the CockroachDB backup module.
+
+    This function handles CockroachDB backup operations, including creating backups,
+    restoring from backups, and listing available backups in storage locations. It
+    defines the module parameters, validates inputs, connects to the database, and
+    executes the appropriate SQL commands based on the requested operation.
+
+    Operations:
+    - backup: Create full or incremental backups of databases/tables
+    - restore: Restore databases or tables from existing backups
+    - list: List available backups in the specified storage location
+
+    The function handles idempotent operations by checking if backups exist before
+    creating new ones and checking if targets exist before restoring. It also supports
+    various backup options like encryption, incremental backups, and different storage
+    locations.
+
+    Returns:
+        dict: Result object containing operation status and relevant details
+    """
     module_args = dict(
         operation=dict(type='str', required=True, choices=['backup', 'restore', 'list']),
         database=dict(type='str'),
@@ -276,7 +297,7 @@ def main():
     table = module.params.get('table')
     uri = module.params.get('uri')
     options = module.params.get('options', {})
-    timeout = module.params.get('timeout', 600)
+    _timeout = module.params.get('timeout', 600)
 
     result = {
         'changed': False,
@@ -339,7 +360,7 @@ def main():
                             for detail_row in backup_details:
                                 # Columns: database_name, parent_schema_name, object_name, object_type, ...
                                 db_name = detail_row[0] if len(detail_row) > 0 else None
-                                parent_schema = detail_row[1] if len(detail_row) > 1 else None
+                                _parent_schema = detail_row[1] if len(detail_row) > 1 else None
                                 object_name = detail_row[2] if len(detail_row) > 2 else None
                                 object_type = detail_row[3] if len(detail_row) > 3 else None
 
@@ -359,7 +380,7 @@ def main():
                         if target_found:
                             backup_exists = True
 
-                    except Exception as show_e:
+                    except Exception as _show_e:
                         # If we can't inspect the backup, be conservative and assume no match
                         pass
 
@@ -368,7 +389,7 @@ def main():
                     result['msg'] = f"Recent backup already exists for {backup_target} at {uri}"
                     module.exit_json(**result)
 
-            except Exception as e:
+            except Exception as _e:
                 # If SHOW BACKUPS IN fails, the collection likely doesn't exist
                 # This is expected for the first backup
                 backup_exists = False
@@ -453,7 +474,7 @@ def main():
 
             # Construct RESTORE command
             restore_target = f"DATABASE {database}" if database and not table else f"TABLE {table}"
-            target_name = database if database and not table else table.split('.')[-1] if '.' in table else table
+            _target_name = database if database and not table else table.split('.')[-1] if '.' in table else table
 
             # Check if target already exists - simplified approach for idempotency
             target_exists = False

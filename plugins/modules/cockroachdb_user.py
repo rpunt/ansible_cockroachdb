@@ -158,6 +158,29 @@ state:
 """
 
 def main():
+    """
+    Main entry point for the CockroachDB user management module.
+
+    This function handles the creation, modification, and deletion of users and roles
+    in a CockroachDB cluster. It processes module parameters, validates inputs, connects
+    to the cluster, and performs the requested user management operations in an idempotent
+    manner.
+
+    Operations:
+    - Create new users or roles if they don't exist (state=present)
+    - Set or update passwords for users
+    - Configure login capability for roles
+    - Grant basic privileges directly through the module
+    - Remove users or roles when no longer needed (state=absent)
+
+    The function handles idempotent operations by checking if users exist and
+    have the requested properties before making changes, ensuring no unnecessary
+    operations are performed.
+
+    Returns:
+        dict: Result object containing operation status and user details
+              including the 'changed' status flag
+    """
     module_args = dict(
         name=dict(type='str', required=True),
         password=dict(type='str', no_log=True),

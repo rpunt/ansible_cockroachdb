@@ -236,6 +236,29 @@ statusmessage:
 """
 
 def main():
+    """
+    Main entry point for the CockroachDB SQL query execution module.
+
+    This function enables running SQL statements and scripts against a CockroachDB database.
+    It processes module parameters, validates inputs, connects to the database, executes
+    the provided SQL, and returns the results in a structured format.
+
+    Features:
+    - Execute single SQL statements via the query parameter
+    - Run multi-line SQL scripts via the script parameter
+    - Execute SQL from external files via the query_file parameter
+    - Support for query parameters (both positional and named)
+    - Control transaction behavior with autocommit setting
+    - Return structured results for data processing in Ansible
+
+    The function handles different input methods (direct query, script, or file)
+    and properly formats query results as a list of dictionaries for further
+    processing in Ansible playbooks.
+
+    Returns:
+        dict: Result object containing query results, row counts, status messages,
+              and the 'changed' status flag
+    """
     module_args = dict(
         query=dict(type='str'),
         query_file=dict(type='path'),
@@ -295,7 +318,7 @@ def main():
             if not os.path.exists(query_file):
                 module.fail_json(msg=f"Query file {query_file} not found")
 
-            with open(query_file, 'r') as f:
+            with open(query_file, 'r', encoding='utf-8') as f:
                 sql = f.read()
                 result['query'] = f"File: {query_file}"
         elif script:
