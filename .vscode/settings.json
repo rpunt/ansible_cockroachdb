@@ -9,14 +9,9 @@
   ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "python.analysis.extraPaths": [
-    "${workspaceFolder}/../../../",
-  ],
-  "python.formatting.provider": "black",
-  "python.formatting.blackArgs": [
-    "--line-length",
-    "160"
-  ],
+  // "python.analysis.extraPaths": [
+  //   "${workspaceFolder}/../../../",
+  // ],
   "[python]": {
     "editor.formatOnSave": false,
     "editor.defaultFormatter": "ms-python.black-formatter"
@@ -31,17 +26,5 @@
     },
     "code-block-style": true
   },
-  "markdownlint.ignore": [
-    "LICENSE",
-    "*.py",
-    "*.yml",
-    "*.yaml",
-    "*.ini",
-    "*.cfg",
-    "*.sh",
-    "node_modules/",
-    "__pycache__/",
-    "*.tar.gz"
-  ],
-  "ansible.python.interpreterPath": "/Users/ryan/.asdf/shims/python3.12"
+  // "ansible.python.interpreterPath": "/Users/ryan/.asdf/shims/python3.12"
 }

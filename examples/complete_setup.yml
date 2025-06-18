@@ -2,7 +2,7 @@
 # Complete example playbook that creates a database, users, and tables
 - name: Complete CockroachDB Setup
   hosts: cockroachdb_servers
-  gather_facts: no
+  gather_facts: false
   vars:
     cockroach_host: "{{ ansible_host }}"
     cockroach_port: 26257
@@ -27,7 +27,7 @@
       register: crdb_info
 
     - name: Display CockroachDB version
-      debug:
+      ansible.builtin.debug:
         msg: "Connected to CockroachDB v{{ crdb_info.cluster.version }}"
 
     - name: Apply optimization profile for OLTP workload
@@ -42,7 +42,7 @@
       register: parameter_result
 
     - name: Display parameter optimization results
-      debug:
+      ansible.builtin.debug:
         var: parameter_result.parameters
 
     - name: Create application database
@@ -279,7 +279,7 @@
         ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
 
     - name: Display backup result
-      debug:
+      ansible.builtin.debug:
         msg: "Database setup complete and backed up to {{ app_database }}_setup_backup/"
 
     # Add fine-grained privileges with the new privilege module
@@ -304,7 +304,7 @@
       register: column_privileges
 
     - name: Display column privilege results
-      debug:
+      ansible.builtin.debug:
         var: column_privileges
 
     # Create statistics for important tables
@@ -330,7 +330,7 @@
       register: statistics_results
 
     - name: Display statistics results
-      debug:
+      ansible.builtin.debug:
         var: statistics_results
 
     # Configure maintenance operations
@@ -349,7 +349,7 @@
       register: gc_result
 
     - name: Display maintenance operation results
-      debug:
+      ansible.builtin.debug:
         var: gc_result
 
     # Final check - display node status
@@ -365,5 +365,5 @@
       register: node_status
 
     - name: Display final cluster setup information
-      debug:
+      ansible.builtin.debug:
         msg: "Complete setup finished successfully with {{ node_status.nodes | length }} nodes"

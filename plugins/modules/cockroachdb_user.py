@@ -1,8 +1,25 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for managing users and roles in a CockroachDB cluster.
+
+This module allows creating, modifying, and removing users and roles in a CockroachDB
+database. It supports setting passwords, managing login capabilities, and granting
+basic privileges directly through the module.
+
+The documentation for this module is maintained in the plugins/docs/cockroachdb_user.yml file.
+"""
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper
+)
+
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +27,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_user
 short_description: Manage CockroachDB users/roles
@@ -30,7 +47,7 @@ options:
     description:
       - The user state
     default: present
-    choices: [ "present", "absent" ]
+    choices: ["present", "absent"]
     type: str
   login:
     description:
@@ -64,7 +81,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -81,10 +98,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - "Your Name (@yourgithub)"
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Create a new CockroachDB user
 - name: Create a new user
   cockroachdb_user:
@@ -121,9 +138,9 @@ EXAMPLES = '''
     ssl_cert: /path/to/client.crt
     ssl_key: /path/to/client.key
     ssl_rootcert: /path/to/ca.crt
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 changed:
   description: Whether the user was created, modified or removed
   returned: always
@@ -138,13 +155,32 @@ state:
   returned: always
   type: str
   sample: "present"
-'''
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
-
+"""
 
 def main():
+    """
+    Main entry point for the CockroachDB user management module.
+
+    This function handles the creation, modification, and deletion of users and roles
+    in a CockroachDB cluster. It processes module parameters, validates inputs, connects
+    to the cluster, and performs the requested user management operations in an idempotent
+    manner.
+
+    Operations:
+    - Create new users or roles if they don't exist (state=present)
+    - Set or update passwords for users
+    - Configure login capability for roles
+    - Grant basic privileges directly through the module
+    - Remove users or roles when no longer needed (state=absent)
+
+    The function handles idempotent operations by checking if users exist and
+    have the requested properties before making changes, ensuring no unnecessary
+    operations are performed.
+
+    Returns:
+        dict: Result object containing operation status and user details
+              including the 'changed' status flag
+    """
     module_args = dict(
         name=dict(type='str', required=True),
         password=dict(type='str', no_log=True),

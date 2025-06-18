@@ -1,8 +1,28 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module to manage CockroachDB statistics for query optimization.
+
+This module allows you to create, delete, and configure statistics collection
+for your CockroachDB tables and columns. Good statistics help the query optimizer
+make better execution plan choices, resulting in faster queries.
+
+For full documentation, see the plugins/docs/cockroachdb_statistics.yml file
+"""
+
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
+from ansible.module_utils._text import to_native
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper,
+    HAS_PSYCOPG2,
+    COCKROACHDB_IMP_ERR,
+)
+
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +30,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_statistics
 short_description: Manage CockroachDB statistics collection
@@ -44,7 +64,7 @@ options:
   operation:
     description:
       - Operation to perform on statistics
-    choices: [ "create", "delete", "configure" ]
+    choices: ["create", "delete", "configure"]
     default: "create"
     type: str
   options:
@@ -111,7 +131,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -133,10 +153,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - Your Name (@yourgithub)
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Create statistics for all columns in a table
 - name: Create statistics for users table
   cockroachdb_statistics:
@@ -193,9 +213,9 @@ EXAMPLES = '''
       fraction: 0.2
       min_rows_threshold: 1000
       min_stale_rows: 500
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 changed:
   description: Whether any changes were made
   returned: always
@@ -228,17 +248,15 @@ settings:
     "sql.stats.automatic_collection.fraction_stale_rows": 0.2,
     "sql.stats.automatic_collection.min_rows_threshold": 1000
   }
-'''
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_native
-from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroachdb import (
-    CockroachDBHelper,
-    HAS_PSYCOPG2,
-    COCKROACHDB_IMP_ERR
-)
+"""
 
 def main():
+    """
+    Main entry point for the cockroachdb_statistics module.
+
+    This function handles creating, deleting, and configuring statistics for CockroachDB
+    tables and columns to help the query optimizer make better plan choices.
+    """
     argument_spec = dict(
         database=dict(type='str', required=True),
         schema=dict(type='str', default='public'),
@@ -424,7 +442,7 @@ def main():
                 tables_to_process = [(schema, table)]
             else:
                 # If no table specified, get all tables in schema
-                tables_query = f"""
+                tables_query = """
                     SELECT table_name
                     FROM information_schema.tables
                     WHERE table_schema = %s
@@ -580,7 +598,7 @@ def main():
                 affected_tables.append(f"{schema}.{table}")
             else:
                 # If no table specified, get all tables in schema
-                tables_query = f"""
+                tables_query = """
                     SELECT table_name
                     FROM information_schema.tables
                     WHERE table_schema = %s

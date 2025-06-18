@@ -1,8 +1,25 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for managing tables in a CockroachDB database.
+
+This module allows creating, modifying, and removing tables in a CockroachDB database.
+It supports defining columns with their data types, constraints, primary keys,
+partitioning, and other table options.
+
+The documentation for this module is maintained in the plugins/docs/cockroachdb_table.yml file.
+"""
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper
+)
+
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +27,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_table
 short_description: Manage CockroachDB tables
@@ -31,7 +48,7 @@ options:
     description:
       - The table state
     default: present
-    choices: [ "present", "absent" ]
+    choices: ["present", "absent"]
     type: str
   columns:
     description:
@@ -125,7 +142,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -142,10 +159,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - "Your Name (@yourgithub)"
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Create a table with columns
 - name: Create users table
   cockroachdb_table:
@@ -292,9 +309,9 @@ EXAMPLES = '''
     ssl_cert: /path/to/client.crt
     ssl_key: /path/to/client.key
     ssl_rootcert: /path/to/ca.crt
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 changed:
   description: Whether the table was created, modified or removed
   returned: always
@@ -314,13 +331,16 @@ state:
   returned: always
   type: str
   sample: "present"
-'''
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
-
+"""
 
 def main():
+    """
+    Main entry point for the cockroachdb_table module.
+
+    This function handles the creation, modification, and removal of tables in a CockroachDB database.
+    It supports defining table structures with columns, data types, constraints, primary keys,
+    partitioning schemes, and other table options.
+    """
     module_args = dict(
         name=dict(type='str', required=True),
         database=dict(type='str', required=True),
@@ -371,7 +391,7 @@ def main():
     )
 
     name = module.params['name']
-    database = module.params['database']
+    _database = module.params['database']
     state = module.params['state']
     columns = module.params['columns']
     primary_key = module.params['primary_key']
@@ -473,7 +493,7 @@ def main():
                             if part_type == 'HASH':
                                 # For HASH partitioning, values represents the number of buckets
                                 if len(part_values) != 1:
-                                    module.fail_json(msg=f"HASH partitioning requires exactly one value (bucket count) per partition")
+                                    module.fail_json(msg="HASH partitioning requires exactly one value (bucket count) per partition")
                                 partition_defs.append(f"PARTITION {part_name} VALUES IN ({part_values[0]})")
 
                             elif part_type == 'LIST':
@@ -497,7 +517,7 @@ def main():
                             elif part_type == 'RANGE':
                                 # For RANGE partitioning, values should be pairs: [from_val, to_val]
                                 if len(part_values) != 2:
-                                    module.fail_json(msg=f"RANGE partitioning requires exactly two values per partition: [from_value, to_value]")
+                                    module.fail_json(msg="RANGE partitioning requires exactly two values per partition: [from_value, to_value]")
 
                                 # Format the range values
                                 from_vals = []
@@ -522,7 +542,7 @@ def main():
 
                         # Add all partition definitions to the CREATE TABLE statement
                         if partition_defs:
-                            create_query += f" (\n  " + ",\n  ".join(partition_defs) + "\n)"
+                            create_query += " (\n  " + ",\n  ".join(partition_defs) + "\n)"
 
                 # Execute the CREATE TABLE query
                 db.execute_query(create_query)

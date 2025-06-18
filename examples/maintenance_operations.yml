@@ -79,26 +79,7 @@
           ttl: "180d"  # Retain raw events for 180 days
       register: gc_configs
 
-    # Compact storage for large tables
-    - name: Compact large tables
-      cockroachdb_maintenance:
-        operation: compact
-        database: "{{ item.database }}"
-        table: "{{ item.table }}"
-        host: "{{ cockroach_host }}"
-        port: "{{ cockroach_port }}"
-        user: "{{ cockroach_user }}"
-        ssl_cert: "{{ cockroach_ssl_cert }}"
-        ssl_key: "{{ cockroach_ssl_key }}"
-        ssl_rootcert: "{{ cockroach_ssl_rootcert }}"
-      loop:
-        - database: app_db
-          table: user_events
-        - database: app_db
-          table: order_history
-        - database: analytics_db
-          table: daily_aggregates
-      register: compact_result
+
 
     # Clean up orphaned schema objects
     - name: Clean up schema objects

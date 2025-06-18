@@ -1,0 +1,5 @@
+# This file contains ignores rule violations for ansible-lint
+examples/collect_statistics.yml jinja[invalid]
+examples/collect_statistics.yml no-relative-paths
+examples/maintenance_operations.yml yaml[indentation]
+examples/manage_backups.yml no-handler

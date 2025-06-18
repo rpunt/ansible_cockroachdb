@@ -1,8 +1,26 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for executing SQL queries against a CockroachDB database.
+
+This module allows running SQL statements, SQL scripts, or queries from files
+against a CockroachDB database with support for positional and named parameters.
+Results from queries are returned in a structured format for further processing.
+
+The documentation for this module is maintained in the plugins/docs/cockroachdb_query.yml file.
+"""
+
+import os
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper
+)
+
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +28,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_query
 short_description: Execute SQL queries against a CockroachDB database
@@ -77,7 +95,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -94,10 +112,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - "Your Name (@yourgithub)"
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Execute a simple query
 - name: Create an index
   cockroachdb_query:
@@ -186,9 +204,9 @@ EXAMPLES = '''
     ssl_cert: /path/to/client.crt
     ssl_key: /path/to/client.key
     ssl_rootcert: /path/to/ca.crt
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 changed:
   description: Whether the query caused a change
   returned: always
@@ -215,14 +233,32 @@ statusmessage:
   returned: always
   type: str
   sample: "CREATE INDEX"
-'''
-
-import os
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
-
+"""
 
 def main():
+    """
+    Main entry point for the CockroachDB SQL query execution module.
+
+    This function enables running SQL statements and scripts against a CockroachDB database.
+    It processes module parameters, validates inputs, connects to the database, executes
+    the provided SQL, and returns the results in a structured format.
+
+    Features:
+    - Execute single SQL statements via the query parameter
+    - Run multi-line SQL scripts via the script parameter
+    - Execute SQL from external files via the query_file parameter
+    - Support for query parameters (both positional and named)
+    - Control transaction behavior with autocommit setting
+    - Return structured results for data processing in Ansible
+
+    The function handles different input methods (direct query, script, or file)
+    and properly formats query results as a list of dictionaries for further
+    processing in Ansible playbooks.
+
+    Returns:
+        dict: Result object containing query results, row counts, status messages,
+              and the 'changed' status flag
+    """
     module_args = dict(
         query=dict(type='str'),
         query_file=dict(type='path'),
@@ -282,7 +318,7 @@ def main():
             if not os.path.exists(query_file):
                 module.fail_json(msg=f"Query file {query_file} not found")
 
-            with open(query_file, 'r') as f:
+            with open(query_file, 'r', encoding='utf-8') as f:
                 sql = f.read()
                 result['query'] = f"File: {query_file}"
         elif script:

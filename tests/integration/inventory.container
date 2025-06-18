@@ -1,0 +1,12 @@
+[cockroachdb_servers]
+localhost ansible_connection=local
+
+[testgroup]
+testhost ansible_connection=local
+
+[all:vars]
+ansible_python_interpreter=/usr/local/bin/python3
+cockroachdb_host=localhost
+cockroachdb_port=26257
+cockroachdb_ssl_mode=disable
+cockroachdb_user=root

@@ -1,8 +1,34 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for managing CockroachDB cluster parameters.
+
+This module allows managing cluster and session parameters in a CockroachDB cluster,
+including setting individual parameters, applying parameter profiles for specific
+workloads, and resetting parameters to their default values.
+
+The documentation for this module is maintained in the plugins/docs/cockroachdb_parameter.yml file.
+"""
+
+import datetime
+import traceback
+import re
+from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils._text import to_native
+try:
+    from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+        CockroachDBHelper,
+        COCKROACHDB_IMP_ERR,
+        HAS_PSYCOPG2,
+    )
+except ImportError:
+    # This is handled in the module
+    pass
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +36,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_parameter
 short_description: Manage CockroachDB cluster parameters
@@ -75,7 +101,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -93,9 +119,9 @@ requirements:
   - psycopg2
 author:
   - "Ryan Punt (@rpunt)"
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Set multiple cluster parameters
 - name: Configure multiple cluster parameters
   cockroachdb_parameter:
@@ -186,9 +212,9 @@ EXAMPLES = '''
     host: localhost
     port: 26257
     user: root
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 changed:
   description: Whether any parameters were changed
   returned: always
@@ -229,18 +255,7 @@ debug:
   returned: always
   type: dict
   sample: {"requested_parameters": {"sql.defaults.distsql": "on"}, "profile_used": null, "scope": "cluster", "reset_all": false}
-'''
-
-import traceback
-import re
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_native
-
-try:
-    from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroachdb import CockroachDBHelper, COCKROACHDB_IMP_ERR, HAS_PSYCOPG2
-except ImportError:
-    # This is handled in the module
-    pass
+"""
 
 # Helper function to normalize time duration strings or objects
 def normalize_duration(duration_val):
@@ -249,8 +264,6 @@ def normalize_duration(duration_val):
     Input examples: '5m', '300ms', '1h', '60s', '1h30m', '2h15m30s', timedelta object
     Returns standardized duration in seconds as float
     """
-    import datetime
-
     # Handle timedelta objects
     if isinstance(duration_val, datetime.timedelta):
         return duration_val.total_seconds()
@@ -469,6 +482,30 @@ PARAMETER_PROFILES = {
 
 
 def main():
+    """
+    Main entry point for the CockroachDB parameter management module.
+
+    This function handles configuration and tuning of CockroachDB parameters
+    at both the cluster and session level. It supports single parameter changes,
+    parameter profiles, and parameter resets in an idempotent way.
+
+    Features:
+    - Set individual cluster and session parameters
+    - Apply predefined parameter profiles for common use cases
+    - Apply custom parameter profiles defined in playbooks
+    - Reset individual parameters to default values
+    - Reset all parameters at once
+    - Intelligent parameter comparison based on data types
+    - Smart handling of duration and byte size values
+
+    The function ensures idempotent operation by intelligently comparing current
+    parameter values with requested values, including special handling for various
+    data types like durations, byte sizes, and booleans.
+
+    Returns:
+        dict: Result object containing changed parameters, profile information,
+              reset parameters, and debug information
+    """
     argument_spec = dict(
         parameters=dict(type='dict'),
         profile=dict(type='str'),  # Remove choices validation to allow custom profiles

@@ -1,8 +1,42 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for gathering information from a CockroachDB cluster.
+
+This module provides a comprehensive way to collect various types of information
+about a CockroachDB cluster, its databases, tables, and settings. It allows for
+flexible information gathering with customizable subsets of data to retrieve.
+
+Key features:
+- Retrieve cluster-level information (version, node count, cluster ID)
+- List all databases in the cluster with their properties
+- Get detailed table information including schemas and partitioning details
+- View table and database sizes for capacity planning
+- List indexes across databases and tables
+- Query cluster settings and configuration
+- Examine user roles and their permissions
+
+The module is designed to be non-invasive, using read-only operations to gather
+information without modifying the cluster state. The collected information can be
+used for documentation, monitoring, or as input for other automation tasks.
+
+For full documentation, see the plugins/docs/cockroachdb_info.yml file
+"""
+
+import traceback
+from ansible.module_utils.basic import AnsibleModule
+try:
+    from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+        CockroachDBHelper
+    )
+except ImportError:
+    # This is handled in the module
+    pass
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +44,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_info
 short_description: Get information about a CockroachDB cluster
@@ -20,10 +54,20 @@ options:
   gather_subset:
     description:
       - Specify which subset of information to gather
-    default: ['cluster', 'databases', 'sizes']
+    default:
+      - cluster
+      - databases
+      - sizes
     type: list
     elements: str
-    choices: ['cluster', 'databases', 'tables', 'roles', 'sizes', 'settings', 'indexes']
+    choices:
+      - cluster
+      - databases
+      - tables
+      - roles
+      - sizes
+      - settings
+      - indexes
   database:
     description:
       - Restrict information gathering to a specific database
@@ -36,7 +80,14 @@ options:
     description:
       - Shorthand to gather specific type of information (alternative to gather_subset)
     type: str
-    choices: ['cluster', 'databases', 'tables', 'roles', 'sizes', 'settings', 'indexes']
+    choices:
+      - cluster
+      - databases
+      - tables
+      - roles
+      - sizes
+      - settings
+      - indexes
   host:
     description:
       - Database host address
@@ -60,7 +111,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -77,10 +128,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - "Your Name (@yourgithub)"
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Get all available information about the CockroachDB cluster
 - name: Gather all CockroachDB information
   cockroachdb_info:
@@ -116,9 +167,9 @@ EXAMPLES = '''
     ssl_key: /path/to/client.key
     ssl_rootcert: /path/to/ca.crt
   register: production_info
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 cluster:
   description: Information about the CockroachDB cluster
   returned: when gather_subset includes cluster
@@ -149,51 +200,52 @@ databases:
   returned: when gather_subset includes databases
   type: list
   elements: str
-  sample: ["defaultdb", "postgres", "system", "production"]  tables:
-    description: List of tables by database
-    returned: when gather_subset includes tables
-    type: dict
-    contains:
-      database_name:
-        description: Tables in this database
-        type: list
-        elements: str
-        sample: ["users", "products", "orders"]
-  partitioned_tables:
-    description: Partitioning information for tables
-    returned: when gather_subset includes tables
-    type: dict
-    contains:
-      database_name:
-        description: Database containing partitioned tables
-        type: dict
-        contains:
-          table_name:
-            description: Partitioning details for the table
-            type: dict
-            contains:
-              partition_type:
-                description: Type of partitioning (HASH, LIST, RANGE)
-                type: str
-                sample: "LIST"
-              partition_columns:
-                description: Columns used for partitioning
-                type: list
-                elements: str
-                sample: ["region"]
-              partitions:
-                description: List of partitions
-                type: list
-                elements: dict
-                contains:
-                  name:
-                    description: Partition name
-                    type: str
-                    sample: "north_america"
-                  values:
-                    description: Partition values
-                    type: raw
-                    sample: ["US", "CA", "MX"]
+  sample: ["defaultdb", "postgres", "system", "production"]
+tables:
+  description: List of tables by database
+  returned: when gather_subset includes tables
+  type: dict
+  contains:
+    database_name:
+      description: Tables in this database
+      type: list
+      elements: str
+      sample: ["users", "products", "orders"]
+partitioned_tables:
+  description: Partitioning information for tables
+  returned: when gather_subset includes tables
+  type: dict
+  contains:
+    database_name:
+      description: Database containing partitioned tables
+      type: dict
+      contains:
+        table_name:
+          description: Partitioning details for the table
+          type: dict
+          contains:
+            partition_type:
+              description: Type of partitioning (HASH, LIST, RANGE)
+              type: str
+              sample: "LIST"
+            partition_columns:
+              description: Columns used for partitioning
+              type: list
+              elements: str
+              sample: ["region"]
+            partitions:
+              description: List of partitions
+              type: list
+              elements: dict
+              contains:
+                name:
+                  description: Partition name
+                  type: str
+                  sample: "north_america"
+                values:
+                  description: Partition values
+                  type: raw
+                  sample: ["US", "CA", "MX"]
 indexes:
   description: List of indexes by table in each database
   returned: when gather_subset includes indexes or type=indexes
@@ -275,19 +327,21 @@ settings:
   description: Cluster settings
   returned: when gather_subset includes settings
   type: dict
-  sample: {
-    "cluster.organization": "Acme Corp",
-    "sql.defaults.distsql": "1",
-    "server.time_until_store_dead": "5m0s"
-  }
-'''
-
-import traceback
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
-
+  sample:
+    cluster.organization: "Acme Corp"
+    sql.defaults.distsql: "1"
+    server.time_until_store_dead: "5m0s"
+"""
 
 def main():
+    """
+    Main entry point for the cockroachdb_info module.
+    
+    This function handles gathering information from a CockroachDB cluster based on
+    the specified information subsets. It can collect data about the cluster,
+    databases, tables, roles, sizes, settings, and indexes using read-only
+    operations to ensure no modifications to the cluster state.
+    """
     module_args = dict(
         gather_subset=dict(
             type='list',
@@ -407,6 +461,7 @@ def main():
                 db.execute_query(f"USE {database}")
 
                 # Get tables
+                tables_result = None
                 if target_table:
                     if db.table_exists(target_table):
                         tables_result = [[target_table]]

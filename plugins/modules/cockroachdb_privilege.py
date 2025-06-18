@@ -1,8 +1,28 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught, too-many-lines
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for managing privileges in CockroachDB.
+
+This module allows granting and revoking privileges on CockroachDB objects
+such as databases, schemas, tables, sequences, and views for specific roles.
+It supports both object-level and column-level privileges.
+
+The documentation for this module is maintained in the plugins/docs/cockroachdb_privilege.yml file.
+"""
+
+import re
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
+from ansible.module_utils._text import to_native
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper,
+    HAS_PSYCOPG2,
+    COCKROACHDB_IMP_ERR,
+)
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +30,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = """
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_privilege
 short_description: Manage CockroachDB privileges
@@ -23,7 +43,7 @@ options:
     description:
       - Whether to grant or revoke the privileges
     required: true
-    choices: [ "grant", "revoke" ]
+    choices: ["grant", "revoke"]
     type: str
   privileges:
     description:
@@ -39,7 +59,7 @@ options:
     description:
       - Type of object to grant/revoke privileges on
     required: true
-    choices: [ "database", "schema", "table", "sequence", "view", "function", "type", "language" ]
+    choices: ["database", "schema", "table", "sequence", "view", "function", "type", "language"]
     type: str
   object_name:
     description:
@@ -97,7 +117,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -119,10 +139,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - Your Name (@yourgithub)
+  - "Ryan Punt (@rpunt)"
 """
 
-EXAMPLES = """
+EXAMPLES = r"""
 # Grant SELECT, INSERT privileges on a table
 - name: Grant table privileges
   cockroachdb_privilege:
@@ -180,7 +200,7 @@ EXAMPLES = """
     cascade: true
 """
 
-RETURN = """
+RETURN = r"""
 changed:
   description: Whether any privilege changes were made
   returned: always
@@ -208,16 +228,6 @@ role_privileges:
     }
   }
 """
-
-import re
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_native
-from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroachdb import (
-    CockroachDBHelper,
-    HAS_PSYCOPG2,
-    COCKROACHDB_IMP_ERR,
-)
-
 
 def check_privileges_changes(
     module,
@@ -260,8 +270,6 @@ def check_privileges_changes(
         module.debug("Detected standard table privilege pattern (SELECT, INSERT)")
         force_idempotency = True
 
-    # Keep track of last privilege check result to ensure accurate idempotency checks
-    last_exact_match = None
     # Get current privileges using direct SHOW GRANTS approach
     try:
         # Build the appropriate object reference for SHOW GRANTS
@@ -319,7 +327,7 @@ def check_privileges_changes(
         else:
             # Fall back to get_object_privileges if SHOW GRANTS didn't return useful data
             module.debug(
-                f"SHOW GRANTS returned no usable data, falling back to information_schema"
+                "SHOW GRANTS returned no usable data, falling back to information_schema"
             )
             current_privileges = helper.get_object_privileges(
                 on_type, object_name, schema, roles
@@ -379,7 +387,7 @@ def check_privileges_changes(
         if "ALL" in requested_privs and on_type in ["table", "view"]:
             requested_privs.update({"SELECT", "INSERT", "UPDATE", "DELETE"})
             module.debug(
-                f"Requested ALL privilege expanded to include standard table privileges"
+                "Requested ALL privilege expanded to include standard table privileges"
             )
 
         module.debug(f"Normalized requested privileges: {requested_privs}")
@@ -398,7 +406,7 @@ def check_privileges_changes(
             module.debug(f"Role {role} current privileges: {role_privs}")
 
             # Create both a dict (for grant option checking) and set (for easier privilege comparisons)
-            role_priv_dict = {p["privilege"]: p["grantable"] for p in role_privs}
+            _role_priv_dict = {p["privilege"]: p["grantable"] for p in role_privs}
             role_priv_set = {p["privilege"] for p in role_privs}
 
             # Normalize privileges by removing column specifications
@@ -594,7 +602,7 @@ def check_privileges_changes(
                                         == ["UPDATE", "USAGE"]
                                     ):
                                         module.debug(
-                                            f"Exact sequence privilege match for UPDATE and USAGE detected"
+                                            "Exact sequence privilege match for UPDATE and USAGE detected"
                                         )
                                         exact_match = True
                                 else:
@@ -781,9 +789,6 @@ def check_privileges_changes(
                 if role_needs_changes:
                     changes_needed = True
 
-                # Save the last privilege check result
-                last_exact_match = exact_match
-
             elif state == "revoke":
                 role_needs_changes = False
 
@@ -822,7 +827,6 @@ def check_privileges_changes(
                             f"No privileges to revoke for role {role}, ensuring idempotency"
                         )
                         # Force idempotency when there are no privileges to revoke
-                        last_exact_match = True
                         exact_match = True
                         role_needs_changes = False
 
@@ -850,10 +854,14 @@ def check_privileges_changes(
 
 
 def main():
-    # Schema privilege idempotency fix - always force idempotency
-    # if roles already have any privileges granted on the schema
-    schema_idempotency_fix_applied = False  # Track if fix applied
+    """
+    Main entry point for the cockroachdb_privilege module.
 
+    This function handles granting and revoking privileges on CockroachDB objects
+    (databases, schemas, tables, sequences, views, functions, types) for specific roles.
+    It supports both object-level and column-level privileges with comprehensive
+    support for CockroachDB's security model.
+    """
     argument_spec = dict(
         state=dict(type="str", choices=["grant", "revoke"], required=True),
         privileges=dict(type="list", elements="str", required=True),
@@ -1648,10 +1656,6 @@ def main():
             result["role_privileges"] = current_privileges
             result["changed"] = False  # Explicitly set to False for idempotency
             module.debug("No changes needed - privileges are already correctly set")
-
-        # Add debug info if available (for schema privilege debugging)
-        if "debug_info" in locals():
-            result["debug_info"] = debug_info
 
         module.exit_json(**result)
 

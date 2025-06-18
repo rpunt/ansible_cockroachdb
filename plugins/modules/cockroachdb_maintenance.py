@@ -1,8 +1,28 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught, too-many-lines
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for performing maintenance operations on a CockroachDB cluster.
+
+This module provides tools for database administrators to maintain and optimize
+CockroachDB clusters, including garbage collection, schema cleanup,
+node management, query cancellation, and data distribution operations.
+
+The documentation for this module is maintained in the plugins/docs/cockroachdb_maintenance.yml file.
+"""
+
+import re
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
+from ansible.module_utils._text import to_native
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper,
+    HAS_PSYCOPG2,
+    COCKROACHDB_IMP_ERR
+)
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +30,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_maintenance
 short_description: Perform CockroachDB maintenance operations
@@ -24,7 +44,6 @@ options:
     required: true
     choices:
       - gc
-      - compact
       - schema_cleanup
       - node_status
       - node_decommission
@@ -56,7 +75,7 @@ options:
   ttl:
     description:
       - TTL (time to live) value for GC operations
-      - Format examples: '24h', '7d', '30m'
+      - "Format examples: '24h', '7d', '30m'"
     type: str
   query_id:
     description:
@@ -76,12 +95,12 @@ options:
   job_type:
     description:
       - Job type for job cancellation by type
-      - Example values: 'BACKUP', 'RESTORE', 'IMPORT', 'SCHEMA CHANGE'
+      - "Example values: 'BACKUP', 'RESTORE', 'IMPORT', 'SCHEMA CHANGE'"
     type: str
   job_status:
     description:
       - Job status for filtering jobs by status
-      - Example values: 'running', 'failed', 'succeeded', 'pending'
+      - "Example values: 'running', 'failed', 'succeeded', 'pending'"
     type: str
   zone_configs:
     description:
@@ -176,7 +195,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -198,10 +217,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - Your Name (@yourgithub)
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Set a custom garbage collection TTL for a table
 - name: Set custom GC TTL for audit_logs table
   cockroachdb_maintenance:
@@ -210,12 +229,7 @@ EXAMPLES = '''
     table: audit_logs
     ttl: '7d'
 
-# Compact storage for a specific table
-- name: Compact a table's storage
-  cockroachdb_maintenance:
-    operation: compact
-    database: my_database
-    table: large_table
+
 
 # Analyze and clean up orphaned schema objects
 - name: Clean up schema objects
@@ -294,9 +308,9 @@ EXAMPLES = '''
     rebalance_options:
       dry_run: true
       max_moves: 100
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 changed:
   description: Whether any changes were made
   returned: always
@@ -377,24 +391,22 @@ rebalance:
     "before_distribution": {},
     "after_distribution": {}
   }
-'''
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_native
-from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroachdb import (
-    CockroachDBHelper,
-    HAS_PSYCOPG2,
-    COCKROACHDB_IMP_ERR
-)
+"""
 
 def main():
+    """
+    Main entry point for the cockroachdb_maintenance module.
+
+    This function handles various maintenance operations on a CockroachDB cluster,
+    including garbage collection, schema cleanup, node management, version upgrade checks,
+    query/session cancellation, job management, and zone configuration.
+    """
     argument_spec = dict(
         operation=dict(
             type='str',
             required=True,
             choices=[
                 'gc',
-                'compact',
                 'schema_cleanup',
                 'node_status',
                 'node_decommission',
@@ -488,9 +500,6 @@ def main():
     if operation == 'gc' and (not database or not table or not ttl):
         module.fail_json(msg="database, table, and ttl are required for gc operation")
 
-    if operation == 'compact' and (not database or not table):
-        module.fail_json(msg="database and table are required for compact operation")
-
     if operation == 'schema_cleanup' and not database:
         module.fail_json(msg="database is required for schema_cleanup operation")
 
@@ -549,8 +558,6 @@ def main():
             try:
                 # The output format is typically (table_name, config_expression)
                 # We need to extract the gc.ttlseconds value from the config_expression
-                import re
-
                 for row in current_ttl_result:
                     # The config is usually in the second column as a string
                     if row and len(row) >= 2:
@@ -592,111 +599,7 @@ def main():
                 }
             }
 
-        elif operation == 'compact':
-            # Connect to the specific database
-            helper.connect_to_database(database)
 
-            # Check if we've recently compacted this table by creating a marker in CockroachDB
-            # using a special comment in the table comment
-            import datetime
-            now = datetime.datetime.now()
-            now_str = now.isoformat()
-
-            # Check for existing comment to see when the table was last compacted
-            comment_query = f"""
-                SELECT create_statement
-                FROM [SHOW CREATE TABLE {database}.{table}]
-            """
-            comment_result = helper.execute_query(comment_query)
-
-            last_compaction = None
-            recently_compacted = False
-
-            # Extract comment
-            comment = ""
-            if comment_result and len(comment_result) > 0:
-                # Try to extract the comment from the CREATE statement
-                create_statement = comment_result[0][0] or ""
-
-                # Try to find any comment in the CREATE statement
-                import re
-                comment_match = re.search(r"COMMENT ON TABLE.*IS\s+'([^']+)'", create_statement, re.DOTALL)
-                if comment_match:
-                    comment = comment_match.group(1)
-
-                # Check if the comment contains our marker
-                import re
-                compact_match = re.search(r"last_compaction:([^;]+)", comment)
-                if compact_match:
-                    try:
-                        last_compaction_str = compact_match.group(1)
-                        last_compaction = datetime.datetime.fromisoformat(last_compaction_str)
-
-                        # If compacted in the last hour, consider it recently compacted
-                        time_since_compaction = now - last_compaction
-                        recently_compacted = time_since_compaction.total_seconds() < 3600  # 1 hour
-                    except (ValueError, TypeError):
-                        # If parsing fails, assume not recently compacted
-                        pass
-
-            # Determine if we should compact based on recency
-            needs_action = not recently_compacted
-
-            # Prepare queries
-            # Note: In older versions, the syntax is EXPERIMENTAL COMPACT (with a space)
-            # In newer versions, it's EXPERIMENTAL_COMPACT (with underscore)
-            # Let's try the version with space as it's more compatible
-            compact_query = f"""
-                ALTER TABLE {database}.{table} EXPERIMENTAL COMPACT
-            """
-
-            # Update the comment to record this compaction
-            if not comment or not "last_compaction:" in comment:
-                # No existing compaction info in comment, create or append
-                if not comment:
-                    comment_update_query = f"""
-                        COMMENT ON TABLE {database}.{table} IS 'last_compaction:{now_str}'
-                    """
-                else:
-                    comment_update_query = f"""
-                        COMMENT ON TABLE {database}.{table} IS '{comment}; last_compaction:{now_str}'
-                    """
-            else:
-                # Update existing compaction timestamp in comment
-                new_comment = re.sub(
-                    r"last_compaction:[^;]+",
-                    f"last_compaction:{now_str}",
-                    comment
-                )
-
-                comment_update_query = f"""
-                    COMMENT ON TABLE {database}.{table} IS '{new_comment}'
-                """
-
-                comment_update_query = f"""
-                    COMMENT ON TABLE {database}.{table} IS '{new_comment}'
-                """
-
-            result['queries'].append(compact_query)
-
-            # Add compaction info to result
-            result['details'] = {
-                'compact': {
-                    'table': f"{database}.{table}",
-                    'last_compaction': last_compaction.isoformat() if last_compaction else 'never',
-                    'recently_compacted': recently_compacted,
-                    'status': 'not needed' if recently_compacted else
-                             ('completed' if not module.check_mode else 'would be compacted')
-                }
-            }
-
-            # Execute queries if not in check mode and compaction is needed
-            if not module.check_mode and needs_action:
-                helper.execute_query(compact_query)
-                helper.execute_query(comment_update_query)
-                result['changed'] = True
-            else:
-                result['changed'] = False
 
         elif operation == 'schema_cleanup':
             # Connect to the specific database

@@ -1,8 +1,32 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for managing CockroachDB databases.
+
+This module handles the creation and removal of databases in a CockroachDB cluster.
+It provides idempotent database management, ensuring that databases exist or don't
+exist as required by your playbooks.
+
+Key features:
+- Create new databases with optional owner assignment
+- Remove existing databases when no longer needed
+- Verify database existence without making changes
+
+The module connects to CockroachDB using the PostgreSQL wire protocol and
+can utilize SSL certificates for secure connections.
+
+For full documentation, see the plugins/docs/cockroachdb_db.yml file
+"""
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper,
+)
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +34,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_db
 short_description: Manage CockroachDB databases
@@ -26,7 +50,7 @@ options:
     description:
       - The database state
     default: present
-    choices: [ "present", "absent" ]
+    choices: ["present", "absent"]
     type: str
   host:
     description:
@@ -51,7 +75,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -72,10 +96,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - "Your Name (@yourgithub)"
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Create a new CockroachDB database
 - name: Create a new database
   cockroachdb_db:
@@ -98,15 +122,11 @@ EXAMPLES = '''
     ssl_cert: /path/to/client.crt
     ssl_key: /path/to/client.key
     ssl_rootcert: /path/to/ca.crt
-'''
+"""
 
-RETURN = '''
-changed:
-  description: Whether the database was created, modified or removed
-  returned: always
-  type: bool
-database:
-  description: Database name
+RETURN = r"""
+name:
+  description: Name of the database
   returned: always
   type: str
   sample: "mydatabase"
@@ -115,13 +135,35 @@ state:
   returned: always
   type: str
   sample: "present"
-'''
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
-
+changed:
+  description: Whether the database was changed
+  returned: always
+  type: bool
+  sample: true
+"""
 
 def main():
+    """
+    Main entry point for the CockroachDB database management module.
+
+    This function handles the creation and deletion of CockroachDB databases.
+    It processes module parameters, validates inputs, connects to the cluster,
+    and performs the requested database operations in an idempotent manner.
+
+    Operations:
+    - Create a new database if it doesn't exist (state=present)
+    - Set database ownership when creating a new database
+    - Drop an existing database if it exists (state=absent)
+    - Check database existence without making changes (check_mode)
+
+    The function handles idempotent operations by checking if the database exists
+    before attempting to create or drop it, ensuring no unnecessary operations
+    are performed.
+
+    Returns:
+        dict: Result object containing operation status and database details
+              including the 'changed' status flag
+    """
     module_args = dict(
         name=dict(type='str', required=True),
         state=dict(type='str', default='present', choices=['present', 'absent']),

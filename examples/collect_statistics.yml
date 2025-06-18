@@ -2,7 +2,7 @@
 # Example playbook for collecting and analyzing CockroachDB statistics
 - name: Collect and analyze CockroachDB statistics
   hosts: cockroachdb_servers
-  gather_facts: no
+  gather_facts: false
   vars:
     cockroach_ssl_cert: "/path/to/client.crt"
     cockroach_ssl_key: "/path/to/client.key"
@@ -16,7 +16,7 @@
 
   tasks:
     - name: Ensure report directory exists
-      file:
+      ansible.builtin.file:
         path: "{{ report_dir }}"
         state: directory
         mode: '0755'
@@ -47,7 +47,7 @@
       register: cluster_info
 
     - name: Create a list of all tables
-      set_fact:
+      ansible.builtin.set_fact:
         all_tables: "{{ cluster_info.tables[target_database] }}"
 
     - name: Collect table statistics
@@ -159,9 +159,10 @@
       register: index_usage
 
     - name: Generate HTML report
-      template:
-        src: ../templates/cockroachdb_report.html.j2
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/cockroachdb_report.html.j2"
         dest: "{{ report_dir }}/cockroachdb_stats_{{ timestamp }}.html"
+        mode: '0644'
       vars:
         database: "{{ target_database }}"
         cluster: "{{ cluster_info.cluster }}"
@@ -175,7 +176,7 @@
       delegate_to: localhost
 
     - name: Report summary
-      debug:
+      ansible.builtin.debug:
         msg: |
           Database statistics collection completed.
           Statistics collected for {{ all_tables | length }} tables in {{ target_database }}.

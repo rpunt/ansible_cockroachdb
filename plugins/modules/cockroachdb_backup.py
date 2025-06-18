@@ -1,8 +1,29 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for managing CockroachDB backups and restores.
+
+This module allows you to:
+- Create full and incremental backups of CockroachDB databases and tables
+- Restore databases from previously created backups
+- List available backups in a storage location (S3, GCS, Azure, or local filesystem)
+
+CockroachDB's backup system provides a reliable way to protect your data
+with minimal impact on cluster performance. Backups can be encrypted,
+incremental, and stored in various cloud storage providers.
+
+For full documentation, see the plugins/docs/cockroachdb_backup.yml file
+"""
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+    CockroachDBHelper,
+)
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +31,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_backup
 short_description: Backup and restore CockroachDB databases
@@ -21,7 +42,7 @@ options:
     description:
       - Type of operation to perform
     required: true
-    choices: [ "backup", "restore", "list" ]
+    choices: ["backup", "restore", "list"]
     type: str
   database:
     description:
@@ -64,6 +85,11 @@ options:
           - Whether the BACKUP command will return immediately after starting the backup job
         type: bool
         default: false
+      subdirectory:
+        description:
+          - For restore operations in newer CockroachDB versions, specifies the subdirectory within the collection
+          - Used in the format 'RESTORE ... FROM [subdirectory] IN [uri]'
+        type: str
   host:
     description:
       - Database host address
@@ -87,7 +113,7 @@ options:
     description:
       - SSL connection mode
     default: verify-full
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     type: str
   ssl_cert:
     description:
@@ -109,10 +135,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - "Your Name (@yourgithub)"
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Create a full database backup to AWS S3
 - name: Backup database to S3
   cockroachdb_backup:
@@ -146,12 +172,15 @@ EXAMPLES = '''
     ssl_rootcert: /path/to/ca.crt
 
 # Restore database from backup
+# Note: For newer CockroachDB versions using the 'FROM subdirectory IN collection' syntax
 - name: Restore database from backup
   cockroachdb_backup:
     operation: restore
     database: production
-    uri: 's3://my-bucket/backups/production/latest/'
+    uri: 's3://my-bucket/backups/'  # This is the collection
     options:
+      # For newer CockroachDB versions, specify the subdirectory in the query pattern:
+      # RESTORE DATABASE production FROM 'latest' IN {{ uri }}
       encryption_passphrase: 'secure_passphrase'
     host: localhost
     port: 26257
@@ -172,9 +201,9 @@ EXAMPLES = '''
     ssl_key: /path/to/client.key
     ssl_rootcert: /path/to/ca.crt
   register: backup_list
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 changed:
   description: Whether the operation resulted in a change
   returned: always
@@ -204,15 +233,30 @@ backups:
   returned: for list operation
   type: list
   sample: ['s3://my-bucket/backups/production/2025-06-01/', 's3://my-bucket/backups/production/2025-06-02/']
-'''
-
-import sys
-import time
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.cockroachdb import CockroachDBHelper
-
+"""
 
 def main():
+    """
+    Main entry point for the CockroachDB backup module.
+
+    This function handles CockroachDB backup operations, including creating backups,
+    restoring from backups, and listing available backups in storage locations. It
+    defines the module parameters, validates inputs, connects to the database, and
+    executes the appropriate SQL commands based on the requested operation.
+
+    Operations:
+    - backup: Create full or incremental backups of databases/tables
+    - restore: Restore databases or tables from existing backups
+    - list: List available backups in the specified storage location
+
+    The function handles idempotent operations by checking if backups exist before
+    creating new ones and checking if targets exist before restoring. It also supports
+    various backup options like encryption, incremental backups, and different storage
+    locations.
+
+    Returns:
+        dict: Result object containing operation status and relevant details
+    """
     module_args = dict(
         operation=dict(type='str', required=True, choices=['backup', 'restore', 'list']),
         database=dict(type='str'),
@@ -253,7 +297,7 @@ def main():
     table = module.params.get('table')
     uri = module.params.get('uri')
     options = module.params.get('options', {})
-    timeout = module.params.get('timeout', 600)
+    _timeout = module.params.get('timeout', 600)
 
     result = {
         'changed': False,
@@ -316,7 +360,7 @@ def main():
                             for detail_row in backup_details:
                                 # Columns: database_name, parent_schema_name, object_name, object_type, ...
                                 db_name = detail_row[0] if len(detail_row) > 0 else None
-                                parent_schema = detail_row[1] if len(detail_row) > 1 else None
+                                _parent_schema = detail_row[1] if len(detail_row) > 1 else None
                                 object_name = detail_row[2] if len(detail_row) > 2 else None
                                 object_type = detail_row[3] if len(detail_row) > 3 else None
 
@@ -336,7 +380,7 @@ def main():
                         if target_found:
                             backup_exists = True
 
-                    except Exception as show_e:
+                    except Exception as _show_e:
                         # If we can't inspect the backup, be conservative and assume no match
                         pass
 
@@ -345,7 +389,7 @@ def main():
                     result['msg'] = f"Recent backup already exists for {backup_target} at {uri}"
                     module.exit_json(**result)
 
-            except Exception as e:
+            except Exception as _e:
                 # If SHOW BACKUPS IN fails, the collection likely doesn't exist
                 # This is expected for the first backup
                 backup_exists = False
@@ -400,7 +444,18 @@ def main():
                 else:
                     # For other errors, try one more check to see if backup exists
                     try:
-                        check_cmd = f"SHOW BACKUP '{uri}'"
+                        # Parse the URI to determine if it's a collection with subdirectory
+                        path_components = uri.replace('userfile:///', '').replace('s3://', '').replace('gs://', '').split('/')
+                        if len(path_components) > 1:
+                            # Likely a path with subdirectory
+                            scheme = 'userfile://' if uri.startswith('userfile://') else ('s3://' if uri.startswith('s3://') else 'gs://')
+                            collection_path = scheme + '/' + path_components[0]
+                            subdirectory = '/'.join(path_components[1:])
+                            check_cmd = f"SHOW BACKUP FROM '{subdirectory}' IN '{collection_path}'"
+                        else:
+                            # Fallback for simple paths
+                            check_cmd = f"SHOW BACKUPS IN '{uri}'"
+
                         existing_backup = db.execute_query(check_cmd)
                         if existing_backup and len(existing_backup) > 0:
                             # Backup exists, so this is idempotent
@@ -409,9 +464,9 @@ def main():
                         else:
                             # Re-raise the original error if backup doesn't exist
                             module.fail_json(msg=str(e))
-                    except:
+                    except Exception as check_e:
                         # If we can't check, re-raise the original error
-                        module.fail_json(msg=str(e))
+                        module.fail_json(msg=f"Backup operation failed: {str(e)}. Check also failed: {str(check_e)}")
 
         elif operation == 'restore':
             if not database and not table:
@@ -419,7 +474,7 @@ def main():
 
             # Construct RESTORE command
             restore_target = f"DATABASE {database}" if database and not table else f"TABLE {table}"
-            target_name = database if database and not table else table.split('.')[-1] if '.' in table else table
+            _target_name = database if database and not table else table.split('.')[-1] if '.' in table else table
 
             # Check if target already exists - simplified approach for idempotency
             target_exists = False
@@ -428,7 +483,7 @@ def main():
             try:
                 # For database restore, check if database exists
                 if database and not table:
-                    check_cmd = f"SHOW DATABASES"
+                    check_cmd = "SHOW DATABASES"
                     databases = db.execute_query(check_cmd)
                     if databases:
                         for db_row in databases:
@@ -482,11 +537,18 @@ def main():
                         # Check if the URI is a full backup path or a collection with subdirectory
                         if '/' in uri.replace('userfile:///', '').replace('s3://', '').replace('gs://', ''):
                             # This looks like a full path to a specific backup
-                            show_backup_cmd = f"SHOW BACKUP '{uri}'"
+                            # Parse the URI to use the new SHOW BACKUP FROM ... IN ... syntax
+                            path_components = uri.replace('userfile:///', '').replace('s3://', '').replace('gs://', '').split('/')
+                            if len(path_components) > 1:
+                                scheme = 'userfile://' if uri.startswith('userfile://') else ('s3://' if uri.startswith('s3://') else 'gs://')
+                                subdirectory = path_components[-1]
+                                collection_path = scheme + '/' + '/'.join(path_components[:-1])
+                                show_backup_cmd = f"SHOW BACKUP FROM '{subdirectory}' IN '{collection_path}'"
+                            else:
+                                show_backup_cmd = f"SHOW BACKUPS IN '{uri}'"
                         else:
-                            # This is a collection path, we need to use the new syntax with a specific backup
-                            # For now, fall back to the old syntax for single backup paths
-                            show_backup_cmd = f"SHOW BACKUP '{uri}'"
+                            # This is a collection path
+                            show_backup_cmd = f"SHOW BACKUPS IN '{uri}'"
 
                         backup_contents = db.execute_query(show_backup_cmd)
                         original_db_name = None
@@ -508,8 +570,25 @@ def main():
                         # If we can't determine the original name, proceed with the specified name
                         module.warn(f"Could not determine original database name from backup: {str(e)}")
 
-                # Construct the restore command
-                cmd_parts = [f"RESTORE {restore_target} FROM '{uri}'"]
+                # Construct the restore command with the new syntax: FROM <subdirectory> IN <collection>
+                # Parse the URI to use the new FROM ... IN ... syntax required by current CockroachDB versions
+                if '/' in uri.replace('userfile:///', '').replace('s3://', '').replace('gs://', ''):
+                    # This looks like a full path to a specific backup
+                    path_components = uri.replace('userfile:///', '').replace('s3://', '').replace('gs://', '').split('/')
+                    if len(path_components) > 1:
+                        # Extract the scheme (userfile://, s3://, gs://)
+                        scheme = 'userfile://' if uri.startswith('userfile://') else ('s3://' if uri.startswith('s3://') else ('gs://' if uri.startswith('gs://') else ''))
+                        # The last component is typically the backup timestamp directory
+                        subdirectory = path_components[-1]
+                        # Everything before the last component is the collection path
+                        collection_path = scheme + '/' + '/'.join(path_components[:-1])
+                        cmd_parts = [f"RESTORE {restore_target} FROM '{subdirectory}' IN '{collection_path}'"]
+                    else:
+                        # Fallback if parsing fails
+                        cmd_parts = [f"RESTORE {restore_target} FROM '{uri}'"]
+                else:
+                    # Simple URI without subdirectory structure - use standard syntax
+                    cmd_parts = [f"RESTORE {restore_target} FROM '{uri}'"]
 
                 if with_options:
                     cmd_parts.append(f"WITH {', '.join(with_options)}")
@@ -560,14 +639,24 @@ def main():
                     backup_subdirectory = '/'.join(path_components[1:])
                     list_cmd = f"SHOW BACKUP FROM '{backup_subdirectory}' IN '{collection_path}'"
                 else:
-                    # Fall back to old syntax for simple paths
-                    list_cmd = f"SHOW BACKUP '{uri}'"
+                    # Use new backup listing syntax for simple paths
+                    list_cmd = f"SHOW BACKUPS IN '{uri}'"
 
                 backup_contents = db.execute_query(list_cmd)
             except Exception as e:
-                # If new syntax fails, try the old syntax as fallback
+                # If new syntax fails, try an alternative approach
                 try:
-                    list_cmd = f"SHOW BACKUP '{uri}'"
+                    # For the latest CockroachDB versions, we need to adapt our approach
+                    if '/' in uri:
+                        # Attempt to split the URI into collection and subdirectory
+                        scheme = 'userfile://' if uri.startswith('userfile://') else ('s3://' if uri.startswith('s3://') else 'gs://')
+                        path = uri.replace('userfile:///', '').replace('s3://', '').replace('gs://', '')
+                        path_parts = path.split('/')
+                        collection = scheme + '/' + path_parts[0]
+                        subdirectory = '/'.join(path_parts[1:])
+                        list_cmd = f"SHOW BACKUP FROM '{subdirectory}' IN '{collection}'"
+                    else:
+                        list_cmd = f"SHOW BACKUPS IN '{uri}'"
                     backup_contents = db.execute_query(list_cmd)
                 except Exception as fallback_e:
                     module.fail_json(msg=f"Failed to show backup contents: {str(e)}. Fallback also failed: {str(fallback_e)}")

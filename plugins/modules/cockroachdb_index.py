@@ -1,8 +1,43 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+# pylint: disable=line-too-long, broad-exception-caught
 
 # Copyright: (c) 2025, Cockroach Labs
 # Apache License, Version 2.0 (see LICENSE or http://www.apache.org/licenses/LICENSE-2.0)
+
+"""
+Ansible module for managing CockroachDB indexes.
+
+This module enables the creation and management of various types of indexes in CockroachDB,
+which are crucial for query performance optimization. It supports creating, modifying,
+and dropping different index types with comprehensive configuration options.
+
+Key features:
+- Create standard B-tree indexes with customizable options
+- Support for unique indexes to enforce data uniqueness constraints
+- Configure expression indexes for complex indexing needs
+- Specify columns to be stored but not indexed with the STORING clause
+- Create partial indexes with WHERE clauses to index subsets of data
+- Drop existing indexes when no longer needed
+
+Indexes in CockroachDB are essential for query performance, and this module helps
+automate their management as part of your infrastructure-as-code workflow.
+
+For full documentation, see the plugins/docs/cockroachdb_index.yml file
+"""
+
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib
+from ansible.module_utils._text import to_native
+try:
+    from ansible_collections.rpunt.cockroachdb.plugins.module_utils.cockroachdb import (
+        CockroachDBHelper,
+        is_valid_identifier,
+        COCKROACHDB_IMP_ERR,
+        HAS_PSYCOPG2,
+    )
+except ImportError:
+    # This is handled in the module
+    pass
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -10,7 +45,7 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = r"""
 ---
 module: cockroachdb_index
 short_description: Manage CockroachDB indexes
@@ -36,7 +71,7 @@ options:
     description:
       - The index state
     default: present
-    choices: [ "present", "absent" ]
+    choices: ["present", "absent"]
     type: str
   columns:
     description:
@@ -100,7 +135,7 @@ options:
     description:
       - SSL mode for database connection
     type: str
-    choices: [ "disable", "allow", "prefer", "require", "verify-ca", "verify-full" ]
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
     default: verify-full
   ssl_cert:
     description:
@@ -125,10 +160,10 @@ options:
 requirements:
   - psycopg2
 author:
-  - Your Name (@yourGitHubHandle)
-'''
+  - "Ryan Punt (@rpunt)"
+"""
 
-EXAMPLES = '''
+EXAMPLES = r"""
 # Create a basic index
 - name: Create index on users table
   cockroachdb_index:
@@ -191,9 +226,9 @@ EXAMPLES = '''
     database: production
     table: users
     state: absent
-'''
+"""
 
-RETURN = '''
+RETURN = r"""
 index:
   description: Index name that was created or dropped
   returned: always
@@ -219,19 +254,33 @@ queries:
   returned: on success
   type: list
   sample: ["CREATE INDEX idx_users_email ON users (email)"]
-'''
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_native
-
-try:
-    from ansible_collections.cockroach_labs.cockroachdb.plugins.module_utils.cockroachdb import CockroachDBHelper, is_valid_identifier, COCKROACHDB_IMP_ERR, HAS_PSYCOPG2
-except ImportError:
-    # This is handled in the module
-    pass
+"""
 
 
 def main():
+    """
+    Main entry point for the CockroachDB index management module.
+
+    This function handles the creation and deletion of indexes in CockroachDB tables.
+    It processes module parameters, validates inputs, connects to the cluster,
+    and performs the requested index operations in an idempotent manner.
+
+    Features:
+    - Create standard or unique indexes on database tables
+    - Support for column-based indexes or expression-based indexes
+    - Support for partial indexes with WHERE clauses
+    - Support for STORING additional columns in the index
+    - Drop existing indexes when no longer needed
+    - Concurrent index creation and deletion
+    - Idempotent operations with IF NOT EXISTS option
+
+    The function handles security by validating identifiers to prevent SQL injection
+    and checks for the existence of tables before attempting to create indexes.
+
+    Returns:
+        dict: Result object containing operation status, index details, and
+              the SQL queries executed during the operation
+    """
     argument_spec = dict(
         name=dict(type='str', required=True),
         database=dict(type='str', required=True),
@@ -323,9 +372,9 @@ def main():
                     query_parts.append("CONCURRENTLY")
 
                 if unique:
-                    query = f"CREATE UNIQUE INDEX"
+                    query = "CREATE UNIQUE INDEX"
                 else:
-                    query = f"CREATE INDEX"
+                    query = "CREATE INDEX"
 
                 if if_not_exists:
                     query += " IF NOT EXISTS"
@@ -357,7 +406,7 @@ def main():
         elif state == 'absent' and index_exists:
             if not module.check_mode:
                 # Drop index
-                query = f"DROP INDEX"
+                query = "DROP INDEX"
 
                 if concurrently:
                     query += " CONCURRENTLY"
