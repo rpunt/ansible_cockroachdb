@@ -27,6 +27,135 @@ ANSIBLE_METADATA = {
     "supported_by": "cockroach_labs",
 }
 
+DOCUMENTATION = r"""
+---
+module: cockroachdb_user
+short_description: Manage CockroachDB users/roles
+description:
+  - Create, drop, or manage CockroachDB users and their privileges
+options:
+  name:
+    description:
+      - Name of the user/role to create or manage
+    required: true
+    type: str
+  password:
+    description:
+      - Password for the user (not required for roles without login privilege)
+    type: str
+  state:
+    description:
+      - The user state
+    default: present
+    choices: ["present", "absent"]
+    type: str
+  login:
+    description:
+      - Whether the role can login
+    default: true
+    type: bool
+  priv:
+    description:
+      - "Privileges to grant the user on a database. Format is db_name:priv1,priv2"
+    type: str
+  host:
+    description:
+      - Database host address
+    default: localhost
+    type: str
+  port:
+    description:
+      - Database port number
+    default: 26257
+    type: int
+  login_user:
+    description:
+      - User name used to authenticate to CockroachDB
+    default: root
+    type: str
+  login_password:
+    description:
+      - Password used to authenticate to CockroachDB
+    type: str
+  ssl_mode:
+    description:
+      - SSL connection mode
+    default: verify-full
+    choices: ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
+    type: str
+  ssl_cert:
+    description:
+      - Path to client certificate file
+    type: path
+  ssl_key:
+    description:
+      - Path to client private key file
+    type: path
+  ssl_rootcert:
+    description:
+      - Path to CA certificate file
+    type: path
+requirements:
+  - psycopg2
+author:
+  - "Ryan Punt (@rpunt)"
+"""
+
+EXAMPLES = r"""
+# Create a new CockroachDB user
+- name: Create a new user
+  cockroachdb_user:
+    name: myuser
+    password: "secure_password"
+    state: present
+    host: localhost
+    port: 26257
+    login_user: root
+    ssl_cert: /path/to/client.crt
+    ssl_key: /path/to/client.key
+    ssl_rootcert: /path/to/ca.crt
+
+# Create a user with privileges
+- name: Create user with privileges
+  cockroachdb_user:
+    name: myuser
+    password: "secure_password"
+    priv: "mydatabase:ALL"
+    state: present
+    host: localhost
+    login_user: root
+    ssl_cert: /path/to/client.crt
+    ssl_key: /path/to/client.key
+    ssl_rootcert: /path/to/ca.crt
+
+# Drop a user
+- name: Drop user
+  cockroachdb_user:
+    name: myuser
+    state: absent
+    host: localhost
+    login_user: root
+    ssl_cert: /path/to/client.crt
+    ssl_key: /path/to/client.key
+    ssl_rootcert: /path/to/ca.crt
+"""
+
+RETURN = r"""
+changed:
+  description: Whether the user was created, modified or removed
+  returned: always
+  type: bool
+user:
+  description: User/role name
+  returned: always
+  type: str
+  sample: "myuser"
+state:
+  description: The new state of the user
+  returned: always
+  type: str
+  sample: "present"
+"""
 
 def main():
     module_args = dict(
