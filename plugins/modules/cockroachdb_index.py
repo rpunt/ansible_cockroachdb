@@ -422,11 +422,14 @@ def main():
             # Get index details
             try:
                 # Try with simplified schema to avoid compatibility issues
+                # pylint: disable=consider-using-f-string
                 query = """
                 SELECT index_name
                 FROM [SHOW INDEXES FROM {}]
                 WHERE index_name = %s
-                """.format(table)
+                """.format(
+                    table
+                )
 
                 rows = db_helper.execute_query(query, (name,), fetch=True)
                 if rows:

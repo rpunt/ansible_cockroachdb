@@ -417,10 +417,10 @@ def main():
 
         # Check if the database exists
         if not db.database_exists(orig_database):
-            module.fail_json(msg="Database %s does not exist" % orig_database)
+            module.fail_json(msg="Database %s does not exist" % orig_database) # pylint: disable=consider-using-f-string
 
         # Switch to the target database
-        db.execute_query("USE %s" % orig_database)
+        db.execute_query("USE %s" % orig_database) # pylint: disable=consider-using-f-string
 
         # Check if the table exists
         table_exists = bool(db.execute_query(
