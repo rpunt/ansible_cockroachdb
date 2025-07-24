@@ -40,7 +40,7 @@
 
 # Cleanup any existing restore target
 - name: Drop restore target database if it exists
-  cockroach_labs.cockroachdb.cockroachdb_db:
+  rpunt.cockroachdb.cockroachdb_db:
     name: "{{ restore_target_db }}"
     state: absent
     host: "{{ cockroach_host }}"
@@ -51,7 +51,7 @@
 
 # Test: First restore (should succeed)
 - name: "Perform database restore (first attempt) using new syntax"
-  cockroach_labs.cockroachdb.cockroachdb_query:
+  rpunt.cockroachdb.cockroachdb_query:
     query: "RESTORE DATABASE {{ backup_source_db }} FROM '{{ backup_subdirectory }}' IN '{{ backup_collection }}' WITH new_db_name = '{{ restore_target_db }}'"
     host: "{{ cockroach_host }}"
     port: "{{ cockroach_port }}"
@@ -76,7 +76,7 @@
 
 # Test: Verify restore target database exists
 - name: Check if restored database exists
-  cockroach_labs.cockroachdb.cockroachdb_query:
+  rpunt.cockroachdb.cockroachdb_query:
     database: "{{ restore_target_db }}"
     query: "SELECT COUNT(*) FROM {{ test_table }}"
     host: "{{ cockroach_host }}"
@@ -102,7 +102,7 @@
 
 # Test: Second restore attempt (should be idempotent)
 - name: Attempt database restore again (second attempt - should be idempotent)
-  cockroach_labs.cockroachdb.cockroachdb_backup:
+  rpunt.cockroachdb.cockroachdb_backup:
     operation: restore
     database: "{{ restore_target_db }}"
     uri: "{{ backup_path }}"
@@ -129,7 +129,7 @@
 
 # Test 2: Table-level restore (if supported)
 - name: Drop table restore target database if it exists
-  cockroach_labs.cockroachdb.cockroachdb_db:
+  rpunt.cockroachdb.cockroachdb_db:
     name: "{{ table_restore_target }}"
     state: absent
     host: "{{ cockroach_host }}"
@@ -139,7 +139,7 @@
   ignore_errors: true
 
 - name: Create target database for table restore
-  cockroach_labs.cockroachdb.cockroachdb_db:
+  rpunt.cockroachdb.cockroachdb_db:
     name: "{{ table_restore_target }}"
     state: present
     host: "{{ cockroach_host }}"
@@ -149,7 +149,7 @@
   when: backup_path is defined
 
 - name: Attempt table restore
-  cockroach_labs.cockroachdb.cockroachdb_backup:
+  rpunt.cockroachdb.cockroachdb_backup:
     operation: restore
     table: "{{ backup_source_db }}.{{ test_table }}"
     uri: "{{ backup_path }}"
@@ -168,7 +168,7 @@
 
 # Test 3: Restore with invalid backup path (should fail gracefully)
 - name: Attempt restore with invalid backup path
-  cockroach_labs.cockroachdb.cockroachdb_backup:
+  rpunt.cockroachdb.cockroachdb_backup:
     operation: restore
     database: "nonexistent_restore_db"
     uri: "userfile:///nonexistent-backup"
@@ -192,7 +192,7 @@
 
 # Test 4: Restore with encryption (if supported)
 - name: Test restore with encryption passphrase (expected to fail without encrypted backup)
-  cockroach_labs.cockroachdb.cockroachdb_backup:
+  rpunt.cockroachdb.cockroachdb_backup:
     operation: restore
     database: "encrypted_restore_test"
     uri: "{{ backup_path }}"
@@ -213,7 +213,7 @@
 
 # Test 5: List operation to verify backup contents
 - name: List backup contents
-  cockroach_labs.cockroachdb.cockroachdb_backup:
+  rpunt.cockroachdb.cockroachdb_backup:
     operation: list
     uri: "{{ backup_path }}"
     host: "{{ cockroach_host }}"
@@ -231,7 +231,7 @@
 
 # Cleanup
 - name: Clean up - Drop restore target databases
-  cockroach_labs.cockroachdb.cockroachdb_db:
+  rpunt.cockroachdb.cockroachdb_db:
     name: "{{ item }}"
     state: absent
     host: "{{ cockroach_host }}"

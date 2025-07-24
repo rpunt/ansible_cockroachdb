@@ -1,8 +1,10 @@
+# TODO: why is this?
 [cockroachdb_servers]
-localhost ansible_connection=local ansible_python_interpreter=/usr/bin/python3
+localhost ansible_connection=local ansible_python_interpreter=/Users/ryan/.asdf/installs/python/3.12.4/bin/python3
 
+# TODO: why is this?
 [testgroup]
-testhost ansible_connection=local ansible_python_interpreter=/usr/bin/python3
+testhost ansible_connection=local ansible_python_interpreter=/Users/ryan/.asdf/installs/python/3.12.4/bin/python3
 
 [all:vars]
 cockroachdb_host=localhost

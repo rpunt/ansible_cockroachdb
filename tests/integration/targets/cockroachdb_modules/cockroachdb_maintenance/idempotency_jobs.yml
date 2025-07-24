@@ -7,7 +7,7 @@
     dummy_job_id: 99999999  # Non-existent job ID
 
 - name: Cancel job (first run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: cancel_jobs
     job_id: "{{ dummy_job_id }}"
     host: "{{ cockroach_host }}"
@@ -22,7 +22,7 @@
     var: cancel_job_result_1
 
 - name: Cancel job (second run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: cancel_jobs
     job_id: "{{ dummy_job_id }}"
     host: "{{ cockroach_host }}"

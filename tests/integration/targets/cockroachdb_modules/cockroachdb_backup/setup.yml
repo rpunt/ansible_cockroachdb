@@ -1,7 +1,7 @@
 ---
 # Setup phase - create test database
 - name: Create test database for backup testing
-  cockroach_labs.cockroachdb.cockroachdb_db:
+  rpunt.cockroachdb.cockroachdb_db:
     name: "{{ test_db }}"
     state: present
     host: "{{ cockroach_host }}"
@@ -10,7 +10,7 @@
     ssl_mode: "{{ cockroach_ssl_mode }}"
 
 - name: Create a test table
-  cockroach_labs.cockroachdb.cockroachdb_table:
+  rpunt.cockroachdb.cockroachdb_table:
     name: "{{ test_table }}"
     database: "{{ test_db }}"
     state: present
@@ -29,7 +29,7 @@
     ssl_mode: disable
 
 - name: Add some data to the table
-  cockroach_labs.cockroachdb.cockroachdb_query:
+  rpunt.cockroachdb.cockroachdb_query:
     database: "{{ test_db }}"
     query: >
       INSERT INTO {{ test_table }} (id, name, email)

@@ -1,6 +1,6 @@
 ---
 - name: Drop test database
-  cockroach_labs.cockroachdb.cockroachdb_db:
+  rpunt.cockroachdb.cockroachdb_db:
     name: "{{ test_db }}"
     state: absent
     host: "{{ cockroach_host }}"

@@ -2,22 +2,18 @@ version: '3'
 
 services:
   cockroachdb:
-    image: cockroachdb/cockroach:latest
-    container_name: cockroachdb-test
-    command: start-single-node --insecure
+    # This will be dynamically replaced with custom image when needed
+    image: cockroachdb-test-image:latest
+    container_name: cockroachdb-install-test
+    command: /usr/sbin/sshd -D
     ports:
-      - "26257:26257"
-      - "8080:8080"
-    volumes:
-      - cockroachdb-data:/cockroach/cockroach-data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+      - "22022:22"
     environment:
-      - COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING=true
+      - DEBIAN_FRONTEND=noninteractive
+      - TZ=Etc/UTC
+    networks:
+      - test_network
 
-volumes:
-  cockroachdb-data:
+networks:
+  test_network:
+    driver: bridge

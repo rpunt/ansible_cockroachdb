@@ -11,3 +11,4 @@ modules:
   - cockroachdb_query
   - cockroachdb_statistics
   - cockroachdb_backup
+  - cockroachdb_install

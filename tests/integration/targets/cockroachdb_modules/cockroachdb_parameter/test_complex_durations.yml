@@ -3,7 +3,7 @@
 - name: Test complex duration formats
   block:
     - name: Set complex duration parameter - first run
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           server.time_until_store_dead: "1h30m"  # 1 hour and 30 minutes = 5400 seconds
         host: "{{ cockroach_host }}"
@@ -18,7 +18,7 @@
         verbosity: 0
 
     - name: Set complex duration parameter - second run (should be idempotent)
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           server.time_until_store_dead: "1h30m"
         host: "{{ cockroach_host }}"
@@ -35,7 +35,7 @@
         fail_msg: "Complex duration is not idempotent"
 
     - name: Test equivalent duration in different formats - seconds
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           server.time_until_store_dead: "5400s"  # Same as 1h30m
         host: "{{ cockroach_host }}"
@@ -52,7 +52,7 @@
         fail_msg: "Equivalent seconds format is not idempotent"
 
     - name: Test equivalent duration in different formats - minutes
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           server.time_until_store_dead: "90m"  # Same as 1h30m
         host: "{{ cockroach_host }}"
@@ -69,7 +69,7 @@
         fail_msg: "Equivalent minutes format is not idempotent"
 
     - name: Test equivalent duration in different formats - compound
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           server.time_until_store_dead: "1h29m60s"  # Also equals 1h30m
         host: "{{ cockroach_host }}"

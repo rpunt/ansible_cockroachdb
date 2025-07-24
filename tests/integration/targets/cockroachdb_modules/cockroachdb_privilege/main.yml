@@ -11,7 +11,7 @@
 - name: Create test objects
   block:
     - name: Drop test database
-      cockroach_labs.cockroachdb.cockroachdb_db:
+      rpunt.cockroachdb.cockroachdb_db:
         name: "{{ test_db }}"
         state: absent
         host: "{{ cockroach_host }}"
@@ -20,7 +20,7 @@
         ssl_mode: "{{ cockroach_ssl_mode }}"
       ignore_errors: true
     - name: Create test database
-      cockroach_labs.cockroachdb.cockroachdb_db:
+      rpunt.cockroachdb.cockroachdb_db:
         name: "{{ test_db }}"
         state: present
         host: "{{ cockroach_host }}"
@@ -29,7 +29,7 @@
         ssl_mode: "{{ cockroach_ssl_mode }}"
       ignore_errors: true
     - name: Drop test user
-      cockroach_labs.cockroachdb.cockroachdb_user:
+      rpunt.cockroachdb.cockroachdb_user:
         name: "{{ test_user }}"
         state: absent
         host: "{{ cockroach_host }}"
@@ -38,7 +38,7 @@
         ssl_mode: "{{ cockroach_ssl_mode }}"
       ignore_errors: true
     - name: Create test user
-      cockroach_labs.cockroachdb.cockroachdb_user:
+      rpunt.cockroachdb.cockroachdb_user:
         name: "{{ test_user }}"
         state: present
         host: "{{ cockroach_host }}"

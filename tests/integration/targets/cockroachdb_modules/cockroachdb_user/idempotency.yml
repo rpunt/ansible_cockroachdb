@@ -3,7 +3,7 @@
 - name: Drop test objects
   block:
     - name: Revoke privileges before removing users (initial cleanup)
-      cockroach_labs.cockroachdb.cockroachdb_privilege:
+      rpunt.cockroachdb.cockroachdb_privilege:
         state: revoke
         privileges:
           - CREATE
@@ -22,7 +22,7 @@
       ignore_errors: true
 
     - name: Remove test users
-      cockroach_labs.cockroachdb.cockroachdb_user:
+      rpunt.cockroachdb.cockroachdb_user:
         name: "{{ item }}"
         state: absent
         host: "{{ cockroach_host }}"
@@ -36,7 +36,7 @@
       ignore_errors: true
 
     - name: Remove test database
-      cockroach_labs.cockroachdb.cockroachdb_db:
+      rpunt.cockroachdb.cockroachdb_db:
         name: "{{ test_db }}"
         state: absent
         host: "{{ cockroach_host }}"
@@ -47,7 +47,7 @@
 
 # Setup phase - create test database
 - name: Create test database for privilege testing
-  cockroach_labs.cockroachdb.cockroachdb_db:
+  rpunt.cockroachdb.cockroachdb_db:
     name: "{{ test_db }}"
     state: present
     host: "{{ cockroach_host }}"
@@ -57,7 +57,7 @@
 
 # Test 1: Creating a new user without privileges
 - name: Create a new user without privileges
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ test_user_no_priv }}"
     state: present
     host: "{{ cockroach_host }}"
@@ -74,7 +74,7 @@
       - create_user_no_priv.state == "present"
 
 - name: Re-run user creation without privileges (idempotency check)
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ test_user_no_priv }}"
     state: present
     host: "{{ cockroach_host }}"
@@ -92,7 +92,7 @@
 
 # Test 2: Creating a new user with privileges
 - name: Create a new user with privileges
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ test_user_with_priv }}"
     priv: "{{ test_db }}:CREATE,CONNECT"
     state: present
@@ -110,7 +110,7 @@
       - create_user_with_priv.state == "present"
 
 - name: Re-run user creation with the same privileges (idempotency check)
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ test_user_with_priv }}"
     priv: "{{ test_db }}:CREATE,CONNECT"
     state: present
@@ -132,7 +132,7 @@
 
 # Test 3: Updating an existing user by adding new privileges
 - name: Create user for privilege updates test
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ test_user_update_priv }}"
     priv: "{{ test_db }}:CONNECT"
     state: present
@@ -143,7 +143,7 @@
   register: create_user_update_priv
 
 - name: Update user with additional privileges
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ test_user_update_priv }}"
     priv: "{{ test_db }}:CONNECT,CREATE"
     state: present
@@ -162,7 +162,7 @@
 
 # Test 4: Re-running the same task with the same privileges (should report no change)
 - name: Re-run privilege update with the same privileges
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ test_user_update_priv }}"
     priv: "{{ test_db }}:CONNECT,CREATE"
     state: present
@@ -184,7 +184,7 @@
 
 # Test 5: Adding different privileges to an existing user
 - name: Add different privileges to existing user
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ test_user_update_priv }}"
     priv: "{{ test_db }}:CONNECT,CREATE,DROP"
     state: present
@@ -203,7 +203,7 @@
 
 # Cleanup phase
 - name: Revoke privileges before removing users (for users with privileges)
-  cockroach_labs.cockroachdb.cockroachdb_privilege:
+  rpunt.cockroachdb.cockroachdb_privilege:
     state: revoke
     privileges:
       - CREATE
@@ -222,7 +222,7 @@
   ignore_errors: true
 
 - name: Remove test users
-  cockroach_labs.cockroachdb.cockroachdb_user:
+  rpunt.cockroachdb.cockroachdb_user:
     name: "{{ item }}"
     state: absent
     host: "{{ cockroach_host }}"
@@ -236,7 +236,7 @@
     - "{{ test_user_update_priv }}"
 
 - name: Remove test database
-  cockroach_labs.cockroachdb.cockroachdb_db:
+  rpunt.cockroachdb.cockroachdb_db:
     name: "{{ test_db }}"
     state: absent
     host: "{{ cockroach_host }}"

@@ -12,7 +12,7 @@
   ansible.builtin.import_tasks: cleanup.yml
 
 - name: Create a test table
-  cockroach_labs.cockroachdb.cockroachdb_table:
+  rpunt.cockroachdb.cockroachdb_table:
     name: "{{ test_table }}"
     database: "{{ test_db }}"
     state: present

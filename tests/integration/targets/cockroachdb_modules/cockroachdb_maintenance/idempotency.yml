@@ -3,7 +3,7 @@
 # Idempotency Test - GC Operation
 #
 - name: Set GC TTL for test table (first run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: gc
     database: "{{ test_db }}"
     table: "{{ test_table }}"
@@ -19,7 +19,7 @@
     var: gc_result_1
 
 - name: Set same GC TTL for test table (second run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: gc
     database: "{{ test_db }}"
     table: "{{ test_table }}"
@@ -44,7 +44,7 @@
 # Idempotency Test - Compact Operation
 #
 - name: Add some data to the table for compaction
-  cockroach_labs.cockroachdb.cockroachdb_query:
+  rpunt.cockroachdb.cockroachdb_query:
     database: "{{ test_db }}"
     query: >
       INSERT INTO {{ test_table }} (id, name, email)
@@ -56,7 +56,7 @@
     ssl_mode: "{{ cockroach_ssl_mode }}"
 
 - name: Compact test table (first run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: compact
     database: "{{ test_db }}"
     table: "{{ test_table }}"
@@ -72,7 +72,7 @@
     var: compact_result_1
 
 - name: Compact test table (second run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: compact
     database: "{{ test_db }}"
     table: "{{ test_table }}"
@@ -103,7 +103,7 @@
     dummy_query_id: "00000000-0000-0000-0000-000000000000"
 
 - name: Cancel query (first run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: cancel_query
     query_id: "{{ dummy_query_id }}"
     host: "{{ cockroach_host }}"
@@ -118,7 +118,7 @@
     var: cancel_query_result_1
 
 - name: Cancel query (second run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: cancel_query
     query_id: "{{ dummy_query_id }}"
     host: "{{ cockroach_host }}"

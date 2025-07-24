@@ -15,40 +15,120 @@
         port: 26257
         delay: 10
         timeout: 60
+      when: not is_ssh_only_container|default(false)
+      tags:
+        - always
+        - cockroachdb_install
 
     - name: Check CockroachDB version
-      ansible.builtin.command: cockroach version
+      ansible.builtin.command: podman exec cockroachdb-install-test cockroach version
       register: cockroach_version
-      ignore_errors: true
       changed_when: false
+      when: not is_ssh_only_container|default(false)
+      tags:
+        - always
+        - cockroachdb_install
+      ignore_errors: true
 
     - name: Debug - show CockroachDB version
       ansible.builtin.debug:
         var: cockroach_version.stdout_lines
       when: cockroach_version is success
+      tags:
+        - always
+        - cockroachdb_install
+
+    # Test installation module specifically
+    - name: Check if custom install test container is running
+      ansible.builtin.command: podman inspect cockroachdb-install-test
+      register: install_container
+      failed_when: false
+      changed_when: false
+      tags:
+        - cockroachdb_install
+
+    - name: Set installation test target host
+      ansible.builtin.set_fact:
+        install_test_host: "{{ (install_container.rc == 0) | ternary('cockroachdb-install-test', 'localhost') }}"
+        install_version: "{{ lookup('env', 'CRDB_VERSION') | default('22.2.9', true) }}"
+        test_prefix: "cockroachdb_install"
+        use_custom_container: true
+        test_mode: "{{ lookup('env', 'TEST_MODE') | default('standard', true) }}"
+        specific_test: "{{ lookup('env', 'SPECIFIC_TEST') | default('', true) }}"
+      tags:
+        - cockroachdb_install
+
+    - name: Display installation test environment information
+      ansible.builtin.debug:
+        msg:
+          - "Running installation tests in {{ test_mode }} mode"
+          - "CockroachDB version: {{ install_version }}"
+          - "Test environment: {{ use_custom_container | ternary('container', 'local host') }}"
+          - "Specific test: {{ specific_test | default('all tests') }}"
+      tags:
+        - cockroachdb_install
+
+    - name: Run installation tests
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_install/installation.yml"
+      tags:
+        - cockroachdb_install
 
     # Test all CockroachDB modules
-    - name: Run module tests
+    - name: Test cockroachdb_info module
       ansible.builtin.include_tasks:
-        file: "targets/cockroachdb_modules/{{ item.module }}/main.yml"
-        apply:
-          tags:
-            - "{{ item.module }}"
-      loop:
-        - { module: "cockroachdb_info", desc: "Get cluster information" }
-        - { module: "cockroachdb_db", desc: "Test database operations" }
-        - { module: "cockroachdb_user", desc: "Test user operations" }
-        - { module: "cockroachdb_privilege", desc: "Test privilege operations" }
-        - { module: "cockroachdb_table", desc: "Test table operations" }
-        - { module: "cockroachdb_index", desc: "Test index operations" }
-        - { module: "cockroachdb_query", desc: "Test query operations" }
-        - { module: "cockroachdb_statistics", desc: "Test statistics operations" }
-        - { module: "cockroachdb_parameter", desc: "Test parameter operations" }
-        - { module: "cockroachdb_maintenance", desc: "Test maintenance operations" }
-        - { module: "cockroachdb_backup", desc: "Test backup operations" }
-      loop_control:
-        label: "Running test for {{ item.desc }}"
-        index_var: module_index
+        file: "targets/cockroachdb_modules/cockroachdb_info/main.yml"
+      tags: ["cockroachdb_info"]
+
+    - name: Test cockroachdb_db module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_db/main.yml"
+      tags: ["cockroachdb_db"]
+
+    - name: Test cockroachdb_user module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_user/main.yml"
+      tags: ["cockroachdb_user"]
+
+    - name: Test cockroachdb_privilege module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_privilege/main.yml"
+      tags: ["cockroachdb_privilege"]
+
+    - name: Test cockroachdb_table module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_table/main.yml"
+      tags: ["cockroachdb_table"]
+
+    - name: Test cockroachdb_index module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_index/main.yml"
+      tags: ["cockroachdb_index"]
+
+    - name: Test cockroachdb_query module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_query/main.yml"
+      tags: ["cockroachdb_query"]
+
+    - name: Test cockroachdb_statistics module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_statistics/main.yml"
+      tags: ["cockroachdb_statistics"]
+
+    - name: Test cockroachdb_parameter module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_parameter/main.yml"
+      tags: ["cockroachdb_parameter"]
+
+    - name: Test cockroachdb_maintenance module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_maintenance/main.yml"
+      tags: ["cockroachdb_maintenance"]
+
+    - name: Test cockroachdb_backup module
+      ansible.builtin.include_tasks:
+        file: "targets/cockroachdb_modules/cockroachdb_backup/main.yml"
+      tags: ["cockroachdb_backup"]
 
     # Cleanup
     # - name: Drop test database

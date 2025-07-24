@@ -5,7 +5,7 @@
 #
 
 - name: Simulate decommission on non-existent node (first run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: node_decommission
     node_id: 999  # Non-existent node
     host: "{{ cockroach_host }}"
@@ -20,7 +20,7 @@
     var: node_decom_result_1
 
 - name: Simulate decommission on non-existent node (second run)
-  cockroach_labs.cockroachdb.cockroachdb_maintenance:
+  rpunt.cockroachdb.cockroachdb_maintenance:
     operation: node_decommission
     node_id: 999  # Non-existent node
     host: "{{ cockroach_host }}"

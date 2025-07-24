@@ -1,6 +1,6 @@
 ---
 - name: Create the same test table again (idempotency check)
-  cockroach_labs.cockroachdb.cockroachdb_table:
+  rpunt.cockroachdb.cockroachdb_table:
     name: "{{ test_table }}"
     database: "{{ test_db }}"
     state: present

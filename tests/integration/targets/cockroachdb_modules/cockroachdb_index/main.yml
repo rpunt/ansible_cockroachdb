@@ -16,7 +16,7 @@
   ansible.builtin.import_tasks: setup.yml
 
 - name: Create an index on the test table
-  cockroach_labs.cockroachdb.cockroachdb_index:
+  rpunt.cockroachdb.cockroachdb_index:
     name: "{{ test_index }}"
     database: "{{ test_db }}"
     table: "{{ test_table }}"

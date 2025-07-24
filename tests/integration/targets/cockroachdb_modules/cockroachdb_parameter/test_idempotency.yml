@@ -2,7 +2,7 @@
 - name: Test CockroachDB parameter module idempotency
   block:
     - name: Set parameter - first run
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           server.time_until_store_dead: "5m"
         host: "{{ cockroach_host }}"
@@ -17,7 +17,7 @@
         verbosity: 0
 
     - name: Set parameter - second run (should be idempotent)
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           server.time_until_store_dead: "5m"
         host: "{{ cockroach_host }}"
@@ -40,7 +40,7 @@
 
     # Test for MiB parameter
     - name: Set MiB parameter - first run
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           kv.snapshot_rebalance.max_rate: "64MiB"
           sql.distsql.temp_storage.workmem: "1GiB"
@@ -56,7 +56,7 @@
         verbosity: 0
 
     - name: Set MiB parameter - second run (should be idempotent)
-      cockroach_labs.cockroachdb.cockroachdb_parameter:
+      rpunt.cockroachdb.cockroachdb_parameter:
         parameters:
           kv.snapshot_rebalance.max_rate: "64MiB"
           sql.distsql.temp_storage.workmem: "1GiB"
@@ -81,7 +81,7 @@
     - name: Test minutes duration
       block:
         - name: Set minutes parameter - first run
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "5m"
             host: "{{ cockroach_host }}"
@@ -91,7 +91,7 @@
           register: first_run
 
         - name: Set minutes parameter - second run (should be idempotent)
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "5m"
             host: "{{ cockroach_host }}"
@@ -110,7 +110,7 @@
     - name: Test seconds duration
       block:
         - name: Set seconds parameter - first run
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "300s"
             host: "{{ cockroach_host }}"
@@ -124,7 +124,7 @@
             var: first_run.debug.comparison_values
 
         - name: Set seconds parameter - second run (should be idempotent)
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "300s"
             host: "{{ cockroach_host }}"
@@ -143,7 +143,7 @@
     - name: Test milliseconds duration
       block:
         - name: Set milliseconds parameter - first run
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "300000ms"
             host: "{{ cockroach_host }}"
@@ -157,7 +157,7 @@
             var: first_run.debug.comparison_values
 
         - name: Set milliseconds parameter - second run (should be idempotent)
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "300000ms"
             host: "{{ cockroach_host }}"
@@ -176,7 +176,7 @@
     - name: Test hours duration
       block:
         - name: Set hours parameter - first run
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "0.0833h"  # ~5 minutes
             host: "{{ cockroach_host }}"
@@ -190,7 +190,7 @@
             var: first_run.debug.comparison_values
 
         - name: Set hours parameter - second run (should be idempotent)
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "0.0833h"
             host: "{{ cockroach_host }}"

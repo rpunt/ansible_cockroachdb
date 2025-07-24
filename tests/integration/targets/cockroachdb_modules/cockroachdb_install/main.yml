@@ -1,0 +1,26 @@
+---
+- name: CockroachDB Installation Tests
+  hosts: all
+  gather_facts: true
+  tasks:
+    # Set default test variables
+    - name: Set CockroachDB installation variables
+      ansible.builtin.set_fact:
+        install_version: "{{ lookup('env', 'CRDB_VERSION') | default('22.2.9', true) }}"
+        test_prefix: "cockroachdb_install"
+        use_custom_container: true
+        test_mode: "{{ lookup('env', 'TEST_MODE') | default('standard', true) }}"
+        specific_test: "{{ lookup('env', 'SPECIFIC_TEST') | default('', true) }}"
+
+    # Print environment info
+    - name: Display test environment information
+      ansible.builtin.debug:
+        msg:
+          - "Running installation tests in {{ test_mode }} mode"
+          - "CockroachDB version: {{ install_version }}"
+          - "Test environment: {{ use_custom_container | ternary('container', 'local host') }}"
+          - "Specific test: {{ specific_test | default('all tests') }}"
+
+    # Import the installation tasks
+    - name: Import installation tasks
+      ansible.builtin.include_tasks: installation.yml

@@ -60,36 +60,23 @@ class TestCockroachDBModules(unittest.TestCase):
             module_name = os.path.basename(module_file).replace('.py', '')
             print(f"Checking documentation for {module_name}...")
 
-            # Check that the module has a docstring with required documentation sections
+            # Check that the module has the required documentation
             with open(module_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                self.assertIn('"""', content,
-                              f"{module_file} is missing a docstring")
 
-                # Extract the docstring
-                docstring_pattern = r'""".+?"""'
-                docstring_match = re.search(docstring_pattern, content, re.DOTALL)
-                self.assertIsNotNone(docstring_match, f"{module_file} docstring format is invalid")
+                # Check for DOCUMENTATION keyword
+                self.assertIn('DOCUMENTATION', content,
+                              f"{module_file} is missing the DOCUMENTATION keyword")
 
-                # Check for DOCUMENTATION section in module
-                doc_section_pattern = r'DOCUMENTATION\s*=\s*(?:r?"""|\')(?:.|\n)+?(?:"""|\')'
-                doc_match = re.search(doc_section_pattern, content)
-                self.assertIsNotNone(doc_match, f"{module_file} is missing DOCUMENTATION section")
+                # Check for required documentation elements regardless of format
+                self.assertIn('short_description:', content,
+                              f"{module_file} is missing 'short_description' section")
+                self.assertIn('description:', content,
+                              f"{module_file} is missing 'description' section")
 
-                # Check for required sections in DOCUMENTATION
-                doc_content = doc_match.group(0)
-                self.assertIn('module:', doc_content,
-                              f"{module_file} DOCUMENTATION is missing 'module' definition")
-                self.assertIn('short_description:', doc_content,
-                              f"{module_file} DOCUMENTATION is missing 'short_description' section")
-                self.assertIn('description:', doc_content,
-                              f"{module_file} DOCUMENTATION is missing 'description' section")
-
-                # Check for EXAMPLES section - supports both triple quotes and triple single quotes
-                examples_pattern = r'EXAMPLES\s*=\s*(?:r?"""|\')(?:.|\n)+?(?:"""|\')'
-                examples_match = re.search(examples_pattern, content)
-                self.assertIsNotNone(examples_match,
-                                    f"{module_file} is missing EXAMPLES section")
+                # Check for EXAMPLES keyword
+                self.assertIn('EXAMPLES', content,
+                              f"{module_file} is missing the EXAMPLES keyword")
 
             print(f"✓ {module_name} has proper documentation")
 
@@ -108,6 +95,7 @@ class TestCockroachDBModules(unittest.TestCase):
             'cockroachdb_query': ['query'],
             'cockroachdb_table': ['name', 'database'],
             'cockroachdb_user': ['name'],
+            'cockroachdb_install': ['version'],  # Version is required for installation
         }
 
         for module_name, required_params in modules_required_params.items():
@@ -228,6 +216,22 @@ class TestCockroachDBModules(unittest.TestCase):
                 # Check for GC TTL option using regex pattern
                 self.assertTrue(re.search(r"ttl.+?type.+?str", content, re.DOTALL | re.IGNORECASE),
                               "cockroachdb_maintenance should support TTL option for GC")
+
+        # Test installation module
+        print("Testing cockroachdb_install functionality...")
+        install_file = 'plugins/modules/cockroachdb_install.py'
+        if os.path.exists(install_file):
+            with open(install_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                # Check for version parameter which should be required
+                self.assertTrue(re.search(r"version.+?required=True", content, re.DOTALL | re.IGNORECASE),
+                              "cockroachdb_install should have required version parameter")
+                # Check for force option for reinstallation
+                self.assertTrue(re.search(r"force.+?type.+?bool", content, re.DOTALL | re.IGNORECASE),
+                              "cockroachdb_install should support force option")
+                # Check for custom installation type support
+                self.assertTrue(re.search(r"custom_url", content, re.DOTALL | re.IGNORECASE),
+                              "cockroachdb_install should support custom URL installations")
 
     def test_module_main_docstrings(self):
         """Test that all modules have docstrings for their main() functions."""

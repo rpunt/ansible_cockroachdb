@@ -18,7 +18,7 @@
     var: create_stats_result_1
 
 - name: Create statistics for all columns (second run)
-  cockroach_labs.cockroachdb.cockroachdb_statistics:
+  rpunt.cockroachdb.cockroachdb_statistics:
     database: "{{ test_db }}"
     table: "{{ test_table }}"
     operation: create
@@ -44,7 +44,7 @@
 #
 # We'll directly use a second test table to avoid cleanup issues
 - name: Create a second test table for specific columns test
-  cockroach_labs.cockroachdb.cockroachdb_table:
+  rpunt.cockroachdb.cockroachdb_table:
     name: "{{ test_table }}_2"
     database: "{{ test_db }}"
     state: present
@@ -63,7 +63,7 @@
     ssl_mode: "{{ cockroach_ssl_mode }}"
 
 - name: Create statistics for specific columns (first run)
-  cockroach_labs.cockroachdb.cockroachdb_statistics:
+  rpunt.cockroachdb.cockroachdb_statistics:
     database: "{{ test_db }}"
     table: "{{ test_table }}_2"
     columns:
@@ -81,7 +81,7 @@
     var: create_cols_stats_result_1
 
 - name: Create statistics for specific columns (second run)
-  cockroach_labs.cockroachdb.cockroachdb_statistics:
+  rpunt.cockroachdb.cockroachdb_statistics:
     database: "{{ test_db }}"
     table: "{{ test_table }}_2"
     columns:
@@ -109,7 +109,7 @@
 # Idempotency Test - Delete Operation
 #
 - name: Create a third test table for delete statistics test
-  cockroach_labs.cockroachdb.cockroachdb_table:
+  rpunt.cockroachdb.cockroachdb_table:
     name: "{{ test_table }}_3"
     database: "{{ test_db }}"
     state: present
@@ -128,7 +128,7 @@
     ssl_mode: "{{ cockroach_ssl_mode }}"
 
 - name: Create statistics on the third test table
-  cockroach_labs.cockroachdb.cockroachdb_statistics:
+  rpunt.cockroachdb.cockroachdb_statistics:
     database: "{{ test_db }}"
     table: "{{ test_table }}_3"
     operation: create
@@ -139,7 +139,7 @@
   register: create_stats_third_table
 
 - name: Delete statistics for the third table (first run)
-  cockroach_labs.cockroachdb.cockroachdb_statistics:
+  rpunt.cockroachdb.cockroachdb_statistics:
     database: "{{ test_db }}"
     table: "{{ test_table }}_3"
     operation: delete
@@ -154,7 +154,7 @@
     var: delete_stats_result_1
 
 - name: Delete statistics for the third table (second run)
-  cockroach_labs.cockroachdb.cockroachdb_statistics:
+  rpunt.cockroachdb.cockroachdb_statistics:
     database: "{{ test_db }}"
     table: "{{ test_table }}_3"
     operation: delete

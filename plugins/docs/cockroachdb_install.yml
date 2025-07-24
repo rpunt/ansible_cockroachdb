@@ -1,0 +1,42 @@
+---
+module: cockroachdb_install
+short_description: Install CockroachDB binary
+description:
+  - This module installs CockroachDB binary from official repositories or custom URL.
+  - Supports standard releases, master versions and custom binaries.
+  - Handles architecture detection and appropriate binary selection.
+  - Manages GIS libraries when available.
+version_added: "1.0.0"
+author: "Cockroach Labs (@cockroachdb)"
+options:
+  version:
+    description:
+      - Version of CockroachDB to install.
+      - Use "master" for the latest development version.
+      - Use "custom" for installing from a custom URL.
+    required: true
+    type: str
+  bin_prefix:
+    description:
+      - Prefix for binary filename.
+    required: false
+    type: str
+    default: "cockroach-"
+  repo_url:
+    description:
+      - URL of the repository from which to download CockroachDB.
+    required: false
+    type: str
+    default: "https://binaries.cockroachdb.com"
+  custom_url:
+    description:
+      - URL to download a custom binary from.
+      - Only used when version is set to "custom".
+    required: false
+    type: str
+  force:
+    description:
+      - Force reinstallation even if binary already exists.
+    required: false
+    type: bool
+    default: false

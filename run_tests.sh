@@ -1,10 +1,14 @@
 #!/bin/bash
 # Test runner script for CockroachDB Ansible collection
-# Supports local testing and Podman-based container testing
 #
-# Podman is the recommended and default testing environment as it provides
-# consistent and isolated testing conditions. Local testing is available as
-# an advanced option for development purposes.
+# This script runs tests for the CockroachDB Ansible collection locally
+# with CockroachDB running in a podman contain    if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-install-test"; then
+        echo -e "${YELLOW}Found existing cockroachdb-install-test container, removing...${NC}"
+        podman stop cockroachdb-install-test 2>/dev/null || true
+        podman rm cockroachdb-install-test 2>/dev/null || true
+    fir consistency and
+# isolation. This simplifies the testing environment while maintaining
+# reliable database behavior.
 
 set -e
 
@@ -17,10 +21,11 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Default settings
-MODE="podman"        # podman, local
 TEST_TYPE="all"      # all, sanity, unit, integration
-USE_CONTAINERS=false # use containers for CockroachDB
 VERBOSE=false        # verbose output
+
+# Default CockroachDB container image name
+CRDB_CONTAINER_IMAGE="cockroachdb/cockroach:latest"
 
 # Help message
 show_help() {
@@ -28,33 +33,22 @@ show_help() {
     echo -e "This script runs tests for the CockroachDB Ansible collection\n"
     echo -e "${BOLD}Usage:${NC} $0 [options]"
     echo -e "\n${BOLD}Options:${NC}"
-    echo -e "  ${GREEN}-m, --mode${NC} MODE       Test mode: podman, local (default: podman)"
     echo -e "  ${GREEN}-t, --type${NC} TYPE       Test type: all, sanity, unit, integration (default: all)"
-    echo -e "  ${GREEN}-c, --container${NC}       Use Podman containers for CockroachDB (default: false)"
     echo -e "  ${GREEN}-v, --verbose${NC}         Enable verbose output"
     echo -e "  ${GREEN}-h, --help${NC}            Show this help message"
     echo -e "\n${BOLD}Examples:${NC}"
-    echo -e "  $0                                 # Run all tests in podman (default)"
-    echo -e "  $0 --mode local --type all         # Run all tests locally"
-    echo -e "  $0 --type sanity                   # Run sanity tests in podman"
-    echo -e "  $0 -t integration -c               # Run integration tests with containerized CockroachDB"
+    echo -e "  $0                                 # Run all tests (default)"
+    echo -e "  $0 --type sanity                   # Run sanity tests only"
+    echo -e "  $0 -t integration                  # Run integration tests only"
 }
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
-        -m|--mode)
-            MODE="$2"
-            shift 2
-            ;;
         -t|--type)
             TEST_TYPE="$2"
             shift 2
-            ;;
-        -c|--container)
-            USE_CONTAINERS=true
-            shift
             ;;
         -v|--verbose)
             VERBOSE=true
@@ -73,11 +67,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate options
-if [[ ! "$MODE" =~ ^(local|podman)$ ]]; then
-    echo -e "${RED}Error: Invalid mode '$MODE'. Must be 'local' or 'podman'${NC}"
-    exit 1
-fi
-
 if [[ ! "$TEST_TYPE" =~ ^(all|sanity|unit|integration)$ ]]; then
     echo -e "${RED}Error: Invalid test type '$TEST_TYPE'. Must be 'all', 'sanity', 'unit', or 'integration'${NC}"
     exit 1
@@ -98,28 +87,98 @@ COLLECTION_FILE="${COLLECTION_NAMESPACE}-${COLLECTION_NAME}-${COLLECTION_VERSION
 # Print test configuration
 echo -e "\n${BOLD}CockroachDB Ansible Collection Test Configuration${NC}"
 echo -e "  ${YELLOW}Collection:${NC} ${COLLECTION_NAMESPACE}.${COLLECTION_NAME} v${COLLECTION_VERSION}"
-echo -e "  ${YELLOW}Mode:${NC} ${MODE}"
 echo -e "  ${YELLOW}Test Type:${NC} ${TEST_TYPE}"
-echo -e "  ${YELLOW}Use Containers:${NC} ${USE_CONTAINERS}"
 echo -e "${BOLD}======================================================${NC}\n"
 
 # Check dependencies
-if [ "$MODE" = "podman" ]; then
-    if ! command -v podman &> /dev/null; then
-        echo -e "${RED}Error: podman is required but not found. Please install it first.${NC}"
-        exit 1
+check_dependency() {
+    local cmd=$1
+    local package=$2
+
+    if ! command -v "$cmd" &> /dev/null; then
+        echo -e "${RED}Error: $package is required but not found.${NC}"
+        echo -e "${YELLOW}Please install $package before running tests.${NC}"
+        return 1
+    fi
+    return 0
+}
+
+# Check required dependencies
+DEPENDENCY_CHECK_FAILED=false
+
+# Check podman for CockroachDB container
+if ! check_dependency "podman" "podman"; then
+    DEPENDENCY_CHECK_FAILED=true
+fi
+
+# Check for podman-compose (needed for CockroachDB container)
+if ! command -v podman-compose &> /dev/null; then
+    echo -e "${YELLOW}Warning: podman-compose not found. Will attempt to use direct podman commands instead.${NC}"
+    echo -e "${YELLOW}For best results, consider installing podman-compose.${NC}"
+fi
+
+# Check for Python dependencies
+if ! check_dependency "python3" "Python 3"; then
+    DEPENDENCY_CHECK_FAILED=true
+fi
+
+if ! check_dependency "ansible" "Ansible"; then
+    DEPENDENCY_CHECK_FAILED=true
+fi
+
+if [ "$DEPENDENCY_CHECK_FAILED" = true ]; then
+    echo -e "${RED}One or more required dependencies are missing. Please install them and try again.${NC}"
+    exit 1
+fi
+
+# Check for required Python dependencies
+echo -e "${BLUE}Checking Python dependencies...${NC}"
+
+# For pytest-based tests, ensure pytest is available
+if [ "$TEST_TYPE" = "unit" ] || [ "$TEST_TYPE" = "all" ]; then
+    if ! python3 -c "import pytest" &> /dev/null; then
+        echo -e "${YELLOW}Warning: pytest is not installed. Installing it now...${NC}"
+        if ! pip3 install pytest mock &> /dev/null; then
+            echo -e "${RED}Failed to install pytest. Please install it manually: pip install pytest mock${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}Successfully installed pytest and mock.${NC}"
+        fi
     fi
 fi
 
-if [ "$USE_CONTAINERS" = true ]; then
-    if ! command -v podman-compose &> /dev/null; then
-        echo -e "${RED}Error: podman-compose is required for container tests. Please install it first.${NC}"
-        exit 1
+# For integration tests, ensure psycopg2 is available
+if [ "$TEST_TYPE" = "integration" ] || [ "$TEST_TYPE" = "all" ]; then
+    echo -e "${YELLOW}Checking and installing psycopg2...${NC}"
+
+    # Find the system Python used by Ansible
+    ANSIBLE_PYTHON=$(ansible --version | grep "python version" | awk '{print $4}')
+    ANSIBLE_PYTHON_PATH=$(which python${ANSIBLE_PYTHON%.*} 2>/dev/null || which python3)
+
+    echo -e "${BLUE}Ansible is using Python: ${ANSIBLE_PYTHON} at ${ANSIBLE_PYTHON_PATH}${NC}"
+
+    # Try to install psycopg2 for multiple Python interpreters to ensure compatibility
+    for PIP_CMD in "pip3" "pip" "python3 -m pip" "python -m pip" "${ANSIBLE_PYTHON_PATH} -m pip"; do
+        echo -e "${BLUE}Trying to install psycopg2-binary with: ${PIP_CMD}${NC}"
+        if ${PIP_CMD} install --user psycopg2-binary; then
+            echo -e "${GREEN}Successfully installed psycopg2-binary using ${PIP_CMD}.${NC}"
+            break
+        fi
+    done
+
+    # Verify installation
+    if ! python3 -c "import psycopg2" &> /dev/null; then
+        echo -e "${YELLOW}Warning: psycopg2 still not accessible with python3. Continuing anyway...${NC}"
+    else
+        echo -e "${GREEN}psycopg2 is available with python3.${NC}"
     fi
 fi
+
+# Option to install all dependencies from requirements.txt
+echo -e "${BLUE}You can also install all dependencies at once with: pip3 install -r requirements.txt${NC}"
 
 # Clean, build and install collection
-echo "Cleaning up build artifacts..."
+echo -e "${BLUE}Cleaning up build artifacts...${NC}"
 rm -rf ansible_collections/ *.tar.gz
 
 echo -e "${BLUE}Building and installing collection...${NC}"
@@ -129,22 +188,97 @@ ansible-galaxy collection install "${COLLECTION_FILE}" --force
 # Start/stop CockroachDB container function
 start_cockroachdb_container() {
     echo -e "${GREEN}Starting CockroachDB in Podman container...${NC}"
-    podman-compose -f tests/integration/docker-compose.yml up -d
-    echo -e "${YELLOW}Waiting for CockroachDB to be ready...${NC}"
 
-    # Give CockroachDB time to initialize
-    local max_attempts=12
+    # First check if the container already exists and is running
+    if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-install-test"; then
+        echo -e "${YELLOW}Found existing CockroachDB container, stopping and removing it...${NC}"
+        podman stop cockroachdb-install-test 2>/dev/null || true
+        podman rm cockroachdb-install-test 2>/dev/null || true
+    fi
+
+    # Check if we have a valid docker-compose.yml file
+    if [ ! -f "tests/integration/docker-compose.yml" ]; then
+        echo -e "${RED}Error: docker-compose.yml file not found at tests/integration/docker-compose.yml${NC}"
+        return 1
+    fi
+
+    # Check if we're testing the cockroachdb_install module
+    if grep -q "cockroachdb_install" <<< "$*"; then
+        echo -e "${YELLOW}Tests include cockroachdb_install module, building custom container...${NC}"
+
+        # Build a custom container from our Dockerfile if it exists
+        if [ -f "tests/integration/Dockerfile" ]; then
+            echo -e "${BLUE}Building custom container for cockroachdb_install tests...${NC}"
+
+            # Build the container with non-interactive mode
+            DOCKER_BUILDKIT=1 podman build \
+                --build-arg DEBIAN_FRONTEND=noninteractive \
+                -t cockroachdb-test-image:latest \
+                -f tests/integration/Dockerfile tests/integration
+
+            if [ $? -eq 0 ]; then
+                # Update docker-compose to use our custom image
+                echo -e "${YELLOW}Updating docker-compose.yml to use custom image${NC}"
+                sed -i.bak 's|image:.*cockroach.*|image: cockroachdb-test-image:latest|g' tests/integration/docker-compose.yml
+                rm -f tests/integration/docker-compose.yml.bak
+            else
+                echo -e "${RED}Failed to build custom image, using standard CockroachDB image${NC}"
+            fi
+        fi
+    else
+        # Use standard CockroachDB image
+        echo -e "${BLUE}Using standard CockroachDB container image...${NC}"
+
+        # Make sure docker-compose.yml is using the standard image
+        if [ -f "tests/integration/docker-compose.yml" ] && ! grep -q "image: cockroachdb/cockroach:latest" tests/integration/docker-compose.yml; then
+            echo -e "${YELLOW}Updating docker-compose.yml to use standard CockroachDB image${NC}"
+            sed -i.bak 's|image:.*|image: cockroachdb/cockroach:latest|g' tests/integration/docker-compose.yml
+            rm -f tests/integration/docker-compose.yml.bak
+        fi
+    fi
+
+    # Try with podman-compose first (with better error handling)
+    echo -e "${BLUE}Attempting to start CockroachDB with podman-compose...${NC}"
+    if podman-compose -f tests/integration/docker-compose.yml up -d; then
+        echo -e "${GREEN}Successfully started CockroachDB with podman-compose${NC}"
+    else
+        # Fall back to direct podman commands if podman-compose fails
+        echo -e "${YELLOW}podman-compose failed, falling back to direct podman commands...${NC}"
+
+        # Get image name from docker-compose file
+        local image_name=$(grep "image:" tests/integration/docker-compose.yml | awk '{print $2}')
+        if [ -z "$image_name" ]; then
+            image_name="cockroachdb/cockroach:latest"
+            echo -e "${YELLOW}No image specified in docker-compose.yml, using default: $image_name${NC}"
+        fi
+
+        echo -e "${BLUE}Starting CockroachDB with podman run...${NC}"
+        podman run --name cockroachdb-install-test -d \
+            -p 26257:26257 -p 8080:8080 \
+            "$image_name" \
+            start-single-node --insecure
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Failed to start CockroachDB container directly with podman${NC}"
+            return 1
+        fi
+    fi
+
+    echo -e "${YELLOW}Waiting for SSH server to be ready...${NC}"
+
+    # Give SSH server time to initialize
+    local max_attempts=5
     local attempt=1
     while [ $attempt -le $max_attempts ]; do
-        echo -e "${BLUE}Checking if CockroachDB is ready (attempt $attempt/$max_attempts)...${NC}"
-        if podman exec cockroachdb-test curl -s http://localhost:8080/health > /dev/null 2>&1; then
+        echo -e "${BLUE}Checking if SSH server is ready (attempt $attempt/$max_attempts)...${NC}"
+        if podman exec cockroachdb-install-test ps -ef | grep -v grep | grep sshd > /dev/null 2>&1; then
             echo -e "${GREEN}CockroachDB is ready!${NC}"
             break
         fi
 
         if [ $attempt -eq $max_attempts ]; then
             echo -e "${RED}CockroachDB failed to start properly within the expected time.${NC}"
-            podman logs cockroachdb-test
+            podman logs cockroachdb-install-test
             return 1
         fi
 
@@ -156,127 +290,52 @@ start_cockroachdb_container() {
 
 stop_cockroachdb_container() {
     echo -e "${GREEN}Stopping CockroachDB container...${NC}"
-    podman-compose -f tests/integration/docker-compose.yml down
+
+    # First try podman-compose
+    if podman-compose -f tests/integration/docker-compose.yml down 2>/dev/null; then
+        echo -e "${GREEN}Successfully stopped containers with podman-compose${NC}"
+    else
+        # Fall back to direct podman commands
+        echo -e "${YELLOW}Using direct podman commands to stop container...${NC}"
+        podman stop cockroachdb-install-test 2>/dev/null || true
+        podman rm cockroachdb-install-test 2>/dev/null || true
+    fi
 }
 
 # Run the appropriate tests
 run_tests() {
     local test_type=$1
 
-    # Common container test command function
-    run_in_container() {
-        local cmd=$1
-        echo -e "${BLUE}Running command in container: $cmd${NC}"
-
-        # Create a setup script to ensure proper environment
-        cat > container_setup.sh << EOF
-#!/bin/bash
-set -e -x
-cd /collection
-echo "Setting up container environment..."
-# Ensure minimal environment output during setup
-export DEBIAN_FRONTEND=noninteractive
-
-# Install system dependencies
-apt-get update -qq
-apt-get install -y --no-install-recommends git curl python3-dev libpq-dev gcc build-essential postgresql-client procps -qq
-
-# Set up Python environment
-python3 -m pip install --upgrade pip setuptools wheel
-
-# Install Ansible
-python3 -m pip install ansible ansible-core
-
-# Clean any previous installations and install psycopg2 properly
-python3 -m pip uninstall -y psycopg2 psycopg2-binary || true
-python3 -m pip install psycopg2-binary
-
-# Verify psycopg2 is installed correctly
-python3 -c "import psycopg2; print('psycopg2 version:', psycopg2.__version__)"
-
-# Install additional dependencies
-python3 -m pip install jinja2 pyyaml
-
-# Add IP for localhost to /etc/hosts for better container compatibility
-if ! grep -q "127.0.0.1 localhost" /etc/hosts; then
-    echo "127.0.0.1 localhost" >> /etc/hosts
-fi
-
-# Create symlink for the collection to make sure modules are found
-mkdir -p /root/.ansible/collections/ansible_collections/cockroach_labs
-ln -sf /collection /root/.ansible/collections/ansible_collections/cockroach_labs/cockroachdb
-
-# Print debug info
-echo "Python path:"
-python3 -c "import sys; print(sys.path)"
-echo "Ansible collections path:"
-python3 -c "import os; print(os.environ.get('ANSIBLE_COLLECTIONS_PATH', 'Not set'))"
-
-# Set environment variables for better Python/Ansible compatibility
-export PYTHONPATH="/collection:/root/.ansible/collections:\${PYTHONPATH}"
-export ANSIBLE_COLLECTIONS_PATH="/root/.ansible/collections"
-
-echo "Running command: $cmd"
-$cmd
-EOF
-        chmod +x container_setup.sh
-
-        # Run container with improved settings
-        podman run --rm -v "$(pwd):/collection:Z" --net=host \
-            -e PYTHONUNBUFFERED=1 \
-            -e ANSIBLE_STDOUT_CALLBACK=debug \
-            -e ANSIBLE_PYTHON_INTERPRETER=/usr/local/bin/python3 \
-            -e ANSIBLE_COLLECTIONS_PATH=/root/.ansible/collections \
-            -e PYTHONPATH=/collection:/root/.ansible/collections \
-            -e ANSIBLE_MODULE_UTILS=/collection/plugins/module_utils \
-            -e ANSIBLE_CONFIG=/collection/ansible.cfg \
-            python:3.11-slim bash -c "/collection/container_setup.sh"
-
-        # Clean up
-        rm -f container_setup.sh
-    }
-
     # Run specific test types
     case "$test_type" in
         "sanity")
             echo -e "${GREEN}Running sanity tests...${NC}"
-            local sanity_cmd="python -c 'import unittest; unittest.main(module=\"tests.unit.modules\", argv=[\"first-arg-is-ignored\", \"TestCockroachDBModules.test_module_imports\", \"TestCockroachDBModules.test_documentation_exists\"])'"
-            if [ "$MODE" = "podman" ]; then
-                run_in_container "$sanity_cmd"
-            else
-                eval $sanity_cmd
-            fi
+            python -c 'import unittest; unittest.main(module="tests.unit.modules", argv=["first-arg-is-ignored", "TestCockroachDBModules.test_module_imports", "TestCockroachDBModules.test_documentation_exists"])'
             ;;
         "unit")
             echo -e "${GREEN}Running unit tests...${NC}"
-            local unit_cmd="python -m unittest tests/unit/modules.py"
-            if [ "$MODE" = "podman" ]; then
-                run_in_container "$unit_cmd"
+
+            # First run standard module unit tests
+            python -m unittest tests/unit/modules.py
+
+            # Then run pytest-style unit tests
+            echo -e "${GREEN}Running module-specific pytest unit tests...${NC}"
+            local pytest_tests=$(find tests/unit/plugins/modules -name "test_*.py" 2>/dev/null)
+            if [ -n "$pytest_tests" ]; then
+                for test_file in $pytest_tests; do
+                    echo -e "${BLUE}Running pytest tests for: $test_file${NC}"
+                    python -m pytest $test_file -v
+                done
             else
-                eval $unit_cmd
+                echo -e "${YELLOW}No module-specific pytest tests found. Skipping.${NC}"
             fi
-            ;;        "integration")
+            ;;
+        "integration")
             echo -e "${GREEN}Running integration tests...${NC}"
-            if [ "$USE_CONTAINERS" = true ]; then
-                start_cockroachdb_container
-                trap stop_cockroachdb_container EXIT
-            elif [ "$MODE" = "local" ]; then
-                # Check if CockroachDB is installed and running locally when in local mode
-                if ! command -v cockroach &> /dev/null; then
-                    echo -e "${RED}Error: CockroachDB not found. In local mode, you must have CockroachDB installed.${NC}"
-                    echo -e "${YELLOW}Tip: Install CockroachDB or use podman mode with --container option.${NC}"
-                    exit 1
-                fi
 
-                # Check if CockroachDB is running by trying to connect
-                if ! cockroach sql --insecure --host=localhost --port=26257 -e "SELECT 1" &> /dev/null; then
-                    echo -e "${RED}Error: CockroachDB is not running or not accessible.${NC}"
-                    echo -e "${YELLOW}Tip: Start CockroachDB with: cockroach start-single-node --insecure --background${NC}"
-                    exit 1
-                fi
-
-                echo -e "${GREEN}Successfully connected to local CockroachDB instance${NC}"
-            fi
+            # Always use containers for CockroachDB
+            start_cockroachdb_container "integration cockroachdb_install"
+            trap stop_cockroachdb_container EXIT
 
             # Check if the integration tests file exists
             if [ ! -f "tests/integration/integration_tests.yml" ]; then
@@ -290,68 +349,83 @@ EOF
                 exit 1
             fi
 
-            # Create a container-friendly inventory file when running in podman mode
-            if [ "$MODE" = "podman" ]; then
-                echo -e "${YELLOW}Creating container-friendly inventory file${NC}"
-                cat > tests/integration/inventory.container << EOF
+            # Make sure the inventory has the cockroachdb_servers group
+            if ! grep -q '\[cockroachdb_servers\]' "tests/integration/inventory"; then
+                echo -e "${YELLOW}Warning: Adding cockroachdb_servers group to inventory${NC}"
+
+                # Get the Python interpreter path that has psycopg2 installed
+                # First check which interpreter has psycopg2 available
+                echo -e "${BLUE}Finding a Python interpreter with psycopg2 installed...${NC}"
+
+                # Try to find a Python interpreter with psycopg2
+                for py_cmd in "python3" "python" "/usr/local/bin/python3" "/usr/bin/python3"; do
+                    echo -e "${YELLOW}Checking ${py_cmd}...${NC}"
+                    if $py_cmd -c "import psycopg2" &> /dev/null; then
+                        PYTHON_PATH=$($py_cmd -c "import sys; print(sys.executable)")
+                        echo -e "${GREEN}Found Python interpreter with psycopg2: ${PYTHON_PATH}${NC}"
+                        break
+                    fi
+                done
+
+                # If no interpreter found, use current one
+                if [ -z "$PYTHON_PATH" ]; then
+                    PYTHON_PATH=$(python3 -c "import sys; print(sys.executable)" 2>/dev/null || which python3)
+                    echo -e "${YELLOW}No Python with psycopg2 found, using default: ${PYTHON_PATH}${NC}"
+                fi
+
+                cat > tests/integration/inventory << EOF
 [cockroachdb_servers]
-localhost ansible_connection=local
+localhost ansible_connection=local ansible_python_interpreter=${PYTHON_PATH}
 
 [testgroup]
-testhost ansible_connection=local
+testhost ansible_connection=local ansible_python_interpreter=${PYTHON_PATH}
 
 [all:vars]
-ansible_python_interpreter=/usr/local/bin/python3
+ansible_python_interpreter=${PYTHON_PATH}
 cockroachdb_host=localhost
 cockroachdb_port=26257
 cockroachdb_ssl_mode=disable
 cockroachdb_user=root
 EOF
-                INVENTORY_FILE="tests/integration/inventory.container"
-            else
-                # Make sure the inventory has the cockroachdb_servers group for local mode
-                if ! grep -q '\[cockroachdb_servers\]' "tests/integration/inventory"; then
-                    echo -e "${YELLOW}Warning: Adding cockroachdb_servers group to inventory${NC}"
-                    cat > tests/integration/inventory << EOF
-[cockroachdb_servers]
-localhost ansible_connection=local ansible_python_interpreter=$(which python3)
-
-[testgroup]
-testhost ansible_connection=local ansible_python_interpreter=$(which python3)
-
-[all:vars]
-ansible_python_interpreter=$(which python3)
-cockroachdb_host=localhost
-cockroachdb_port=26257
-cockroachdb_ssl_mode=disable
-cockroachdb_user=root
-EOF
-                fi
-                INVENTORY_FILE="tests/integration/inventory"
             fi
 
-            local int_cmd="ansible-playbook -i $INVENTORY_FILE tests/integration/integration_tests.yml -v"
-            if [ "$MODE" = "podman" ]; then
-                echo -e "${BLUE}Running tests in podman container...${NC}"
-                run_in_container "$int_cmd"
-            else
-                # Set environment variables for local mode
-                export PYTHONPATH="$(pwd):${PYTHONPATH}"
-                export ANSIBLE_COLLECTIONS_PATH="$(ansible-config dump | grep 'COLLECTIONS_PATHS' | awk -F ' = ' '{print $2}')"
+            # Set environment variables for tests
+            export PYTHONPATH="$(pwd):${PYTHONPATH}"
+            export ANSIBLE_COLLECTIONS_PATH="$(ansible-config dump | grep 'COLLECTIONS_PATHS' | awk -F ' = ' '{print $2}')"
 
-                # If ANSIBLE_COLLECTIONS_PATH is not set, use default paths
-                if [ -z "$ANSIBLE_COLLECTIONS_PATH" ]; then
-                    # Add common ansible collection paths
-                    export ANSIBLE_COLLECTIONS_PATH="$HOME/.ansible/collections:/usr/share/ansible/collections"
-                fi
-
-                # Add the current directory to ANSIBLE_COLLECTIONS_PATH
-                export ANSIBLE_COLLECTIONS_PATH="$(pwd):${ANSIBLE_COLLECTIONS_PATH}"
-
-                echo -e "${BLUE}Using ANSIBLE_COLLECTIONS_PATH: ${ANSIBLE_COLLECTIONS_PATH}${NC}"
-
-                eval $int_cmd
+            # If ANSIBLE_COLLECTIONS_PATH is not set, use default paths
+            if [ -z "$ANSIBLE_COLLECTIONS_PATH" ]; then
+                # Add common ansible collection paths
+                export ANSIBLE_COLLECTIONS_PATH="$HOME/.ansible/collections:/usr/share/ansible/collections"
             fi
+
+            # Add the current directory to ANSIBLE_COLLECTIONS_PATH
+            export ANSIBLE_COLLECTIONS_PATH="$(pwd):${ANSIBLE_COLLECTIONS_PATH}"
+
+            echo -e "${BLUE}Using ANSIBLE_COLLECTIONS_PATH: ${ANSIBLE_COLLECTIONS_PATH}${NC}"
+
+            # Debug which Python is being used
+            echo -e "${YELLOW}Checking Python interpreters...${NC}"
+            python3 -c "import sys; print(f'Python executable: {sys.executable}')"
+            python3 -c "import sys; print(f'Python path: {sys.path}')"
+
+            # Run the integration tests with debug flags
+            echo -e "${YELLOW}Running integration tests with verbose output...${NC}"
+
+            # First run the cockroachdb_install module tests if they exist
+            if [ -d "tests/integration/targets/cockroachdb_modules/cockroachdb_install" ]; then
+                echo -e "${GREEN}Running cockroachdb_install module tests...${NC}"
+
+                # Set environment variables to avoid prompts
+                export DEBIAN_FRONTEND=noninteractive
+
+                # Run the tests
+                ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i tests/integration/inventory tests/integration/targets/cockroachdb_modules/cockroachdb_install/main.yml -vvv
+            fi
+
+            # Then run the standard integration tests
+            echo -e "${GREEN}Running standard integration tests...${NC}"
+            ansible-playbook -i tests/integration/inventory tests/integration/integration_tests.yml -vvv -e "is_ssh_only_container=true"
             ;;
         "all")
             run_tests "sanity"
@@ -362,6 +436,7 @@ EOF
 }
 
 # Run the tests
+echo -e "${YELLOW}Starting tests for type: $TEST_TYPE${NC}"
 run_tests "$TEST_TYPE"
 
 echo -e "\n${GREEN}${BOLD}All tests completed successfully!${NC}"

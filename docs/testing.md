@@ -30,6 +30,21 @@ The testing scripts support several types of tests:
 
 ## Running Tests
 
+### Unit Tests for Individual Modules
+
+For specific module unit testing, we now have dedicated test files:
+
+- `tests/unit/plugins/modules/test_cockroachdb_install.py` - Tests for the CockroachDB installation module
+
+You can run these unit tests directly:
+
+```bash
+# Run unit tests for the cockroachdb_install module
+./run_unit_tests.sh
+```
+
+The unit tests use pytest and mock objects to test each function in the module, covering both success and failure paths.
+
 ### Using the Comprehensive Test Script
 
 The `run_tests.sh` script supports multiple testing environments and configurations:
@@ -145,6 +160,7 @@ The integration tests cover all the modules in the collection:
 | cockroachdb_parameter | Manage CockroachDB parameters |
 | cockroachdb_maintenance | Perform CockroachDB maintenance operations |
 | cockroachdb_backup | Manage CockroachDB backups |
+| cockroachdb_install | Install and manage CockroachDB binary |
 
 #### Environment Variables
 
@@ -169,15 +185,67 @@ The following test files are included:
 
 The `--file` and `--test-mode` options have been removed from the latest version of `run_tests.sh` for simplification. The script now uses the standard `integration_tests.yml` file for all integration testing.
 
+#### Module-Specific Integration Tests
+
+Each module has its own integration test directory:
+
+```text
+tests/integration/targets/cockroachdb_modules/
+└── cockroachdb_install/
+    ├── main.yml
+    └── installation.yml
+└── cockroachdb_user/
+    ├── main.yml
+    └── idempotency.yml
+...
+```
+
+These tests typically include:
+
+- A `main.yml` file that sets up test variables and imports task files
+- Task files (e.g., `installation.yml`, `idempotency.yml`) that contain specific test cases
+- Tests for both success cases and error handling
+- Idempotency checks to ensure modules can be run multiple times safely
+
 ## Adding New Tests
 
 ### Adding Unit Tests
 
-Place new unit tests in:
+The collection now supports two approaches for unit testing:
 
-```python
-tests/unit/
-```
+1. **Traditional Ansible Unit Test Framework**:
+   Place tests in the standard Ansible unit test directory structure:
+
+   ```python
+   tests/unit/
+   ```
+
+2. **Module-Specific pytest Tests**:
+   For more comprehensive testing of individual modules, place pytest-based test files in:
+
+   ```python
+   tests/unit/plugins/modules/
+   ```
+
+   For example, the cockroachdb_install module has a dedicated test file:
+
+   ```python
+   tests/unit/plugins/modules/test_cockroachdb_install.py
+   ```
+
+   These tests can be run directly using pytest or via the provided script:
+
+   ```bash
+   ./run_unit_tests.sh
+   ```
+
+When writing module-specific pytest tests:
+
+- Use fixtures to set up mock objects
+- Test each function in isolation
+- Cover both success and failure paths
+- Mock external dependencies (filesystem, network calls, etc.)
+- Follow the naming convention: `test_[function_name]_[scenario]`
 
 ### Adding Integration Tests
 

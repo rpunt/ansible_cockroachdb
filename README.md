@@ -15,14 +15,28 @@ This collection is maintained by Cockroach Labs.
 Before using the CockroachDB collection, you need to install it with the `ansible-galaxy` CLI:
 
 ```bash
-ansible-galaxy collection install cockroach_labs.cockroachdb
+ansible-galaxy collection install rpunt.cockroachdb
+```
+
+### Installing Dependencies
+
+This collection requires the Python psycopg2 package. You can install it with pip:
+
+```bash
+pip install psycopg2-binary
+```
+
+Or install all dependencies at once:
+
+```bash
+pip install -r requirements.txt
 ```
 
 You can also include it in a `requirements.yml` file and install it via `ansible-galaxy collection install -r requirements.yml` using the format:
 
 ```yaml
 collections:
-- name: cockroach_labs.cockroachdb
+- name: rpunt.cockroachdb
 ```
 
 ### Building and Installing from Source
@@ -38,7 +52,7 @@ cd ansible-cockroachdb
 ansible-galaxy collection build --force
 
 # Install the collection globally
-ansible-galaxy collection install cockroach_labs-cockroachdb-*.tar.gz -f
+ansible-galaxy collection install rpunt-cockroachdb-*.tar.gz -f
 ```
 
 Alternatively, you can use the provided script:

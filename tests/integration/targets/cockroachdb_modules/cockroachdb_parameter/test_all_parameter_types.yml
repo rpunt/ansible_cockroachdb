@@ -5,7 +5,7 @@
     - name: Test string parameter
       block:
         - name: Set string parameter
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               server.time_until_store_dead: "15m"
             host: "{{ cockroach_host }}"
@@ -26,7 +26,7 @@
     - name: Test integer parameter
       block:
         - name: Set integer parameter
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               sql.defaults.distsql: 1
             host: "{{ cockroach_host }}"
@@ -48,7 +48,7 @@
       block:
         # First reset to default value to ensure a change will happen
         - name: Reset float parameter to default
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               sql.stats.automatic_collection.fraction_stale_rows: null
             host: "{{ cockroach_host }}"
@@ -61,7 +61,7 @@
             ssl_rootcert: null
 
         - name: Set float parameter
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               sql.stats.automatic_collection.fraction_stale_rows: 0.35
             host: "{{ cockroach_host }}"
@@ -83,7 +83,7 @@
       block:
         # First reset to default value to ensure a change will happen
         - name: Reset boolean parameter to default
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               kv.rangefeed.enabled: null
             host: "{{ cockroach_host }}"
@@ -96,7 +96,7 @@
             ssl_rootcert: null
 
         - name: Set boolean parameter
-          cockroach_labs.cockroachdb.cockroachdb_parameter:
+          rpunt.cockroachdb.cockroachdb_parameter:
             parameters:
               kv.rangefeed.enabled: true
             host: "{{ cockroach_host }}"
