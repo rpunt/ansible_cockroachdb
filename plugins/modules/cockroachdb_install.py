@@ -466,8 +466,7 @@ def main():
     # Create an AnsibleModule object
     module = AnsibleModule(
         argument_spec=module_args,
-        supports_check_mode=True,
-        supports_become=True
+        supports_check_mode=True
     )
 
     try:
