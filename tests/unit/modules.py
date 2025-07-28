@@ -229,8 +229,8 @@ class TestCockroachDBModules(unittest.TestCase):
                 # Check for force option for reinstallation
                 self.assertTrue(re.search(r"force.+?type.+?bool", content, re.DOTALL | re.IGNORECASE),
                               "cockroachdb_install should support force option")
-                # Check for custom installation type support
-                self.assertTrue(re.search(r"custom_url", content, re.DOTALL | re.IGNORECASE),
+                # Check for custom installation support via repo_url
+                self.assertTrue(re.search(r"Can be a direct URL to a tarball", content, re.DOTALL | re.IGNORECASE),
                               "cockroachdb_install should support custom URL installations")
 
     def test_module_main_docstrings(self):

@@ -2,13 +2,22 @@
 # Test runner script for CockroachDB Ansible collection
 #
 # This script runs tests for the CockroachDB Ansible collection locally
-# with CockroachDB running in a podman contain    if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-install-test"; then
-        echo -e "${YELLOW}Found existing cockroachdb-install-test container, removing...${NC}"
-        podman stop cockroachdb-install-test 2>/dev/null || true
-        podman rm cockroachdb-install-test 2>/dev/null || true
-    fir consistency and
+# with CockroachDB running in a podman container for consistency and
 # isolation. This simplifies the testing environment while maintaining
 # reliable database behavior.
+
+# Clean up any existing containers
+if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-install-test"; then
+    echo -e "${YELLOW}Found existing cockroachdb-install-test container, removing...${NC}"
+    podman stop cockroachdb-install-test 2>/dev/null || true
+    podman rm cockroachdb-install-test 2>/dev/null || true
+fi
+
+if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-server"; then
+    echo -e "${YELLOW}Found existing cockroachdb-server container, removing...${NC}"
+    podman stop cockroachdb-server 2>/dev/null || true
+    podman rm cockroachdb-server 2>/dev/null || true
+fi
 
 set -e
 
@@ -23,6 +32,7 @@ NC='\033[0m' # No Color
 # Default settings
 TEST_TYPE="all"      # all, sanity, unit, integration
 VERBOSE=false        # verbose output
+MODULE_NAME=""       # specific module to test
 
 # Default CockroachDB container image name
 CRDB_CONTAINER_IMAGE="cockroachdb/cockroach:latest"
@@ -34,12 +44,14 @@ show_help() {
     echo -e "${BOLD}Usage:${NC} $0 [options]"
     echo -e "\n${BOLD}Options:${NC}"
     echo -e "  ${GREEN}-t, --type${NC} TYPE       Test type: all, sanity, unit, integration (default: all)"
+    echo -e "  ${GREEN}-m, --module${NC} MODULE   Specific module to test (e.g., cockroachdb_install)"
     echo -e "  ${GREEN}-v, --verbose${NC}         Enable verbose output"
     echo -e "  ${GREEN}-h, --help${NC}            Show this help message"
     echo -e "\n${BOLD}Examples:${NC}"
     echo -e "  $0                                 # Run all tests (default)"
     echo -e "  $0 --type sanity                   # Run sanity tests only"
     echo -e "  $0 -t integration                  # Run integration tests only"
+    echo -e "  $0 -t integration -m cockroachdb_install # Test only cockroachdb_install module"
 }
 
 # Parse command line arguments
@@ -48,6 +60,10 @@ while [[ $# -gt 0 ]]; do
     case $key in
         -t|--type)
             TEST_TYPE="$2"
+            shift 2
+            ;;
+        -m|--module)
+            MODULE_NAME="$2"
             shift 2
             ;;
         -v|--verbose)
@@ -88,6 +104,9 @@ COLLECTION_FILE="${COLLECTION_NAMESPACE}-${COLLECTION_NAME}-${COLLECTION_VERSION
 echo -e "\n${BOLD}CockroachDB Ansible Collection Test Configuration${NC}"
 echo -e "  ${YELLOW}Collection:${NC} ${COLLECTION_NAMESPACE}.${COLLECTION_NAME} v${COLLECTION_VERSION}"
 echo -e "  ${YELLOW}Test Type:${NC} ${TEST_TYPE}"
+if [[ -n "$MODULE_NAME" ]]; then
+    echo -e "  ${YELLOW}Module:${NC} ${MODULE_NAME}"
+fi
 echo -e "${BOLD}======================================================${NC}\n"
 
 # Check dependencies
@@ -187,24 +206,16 @@ ansible-galaxy collection install "${COLLECTION_FILE}" --force
 
 # Start/stop CockroachDB container function
 start_cockroachdb_container() {
-    echo -e "${GREEN}Starting CockroachDB in Podman container...${NC}"
-
-    # First check if the container already exists and is running
-    if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-install-test"; then
-        echo -e "${YELLOW}Found existing CockroachDB container, stopping and removing it...${NC}"
-        podman stop cockroachdb-install-test 2>/dev/null || true
-        podman rm cockroachdb-install-test 2>/dev/null || true
-    fi
-
-    # Check if we have a valid docker-compose.yml file
-    if [ ! -f "tests/integration/docker-compose.yml" ]; then
-        echo -e "${RED}Error: docker-compose.yml file not found at tests/integration/docker-compose.yml${NC}"
-        return 1
-    fi
-
     # Check if we're testing the cockroachdb_install module
     if grep -q "cockroachdb_install" <<< "$*"; then
-        echo -e "${YELLOW}Tests include cockroachdb_install module, building custom container...${NC}"
+        echo -e "${GREEN}Starting test container for cockroachdb_install module...${NC}"
+
+        # First check if the container already exists and is running
+        if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-install-test"; then
+            echo -e "${YELLOW}Found existing test container, stopping and removing it...${NC}"
+            podman stop cockroachdb-install-test 2>/dev/null || true
+            podman rm cockroachdb-install-test 2>/dev/null || true
+        fi
 
         # Build a custom container from our Dockerfile if it exists
         if [ -f "tests/integration/Dockerfile" ]; then
@@ -216,89 +227,120 @@ start_cockroachdb_container() {
                 -t cockroachdb-test-image:latest \
                 -f tests/integration/Dockerfile tests/integration
 
-            if [ $? -eq 0 ]; then
-                # Update docker-compose to use our custom image
-                echo -e "${YELLOW}Updating docker-compose.yml to use custom image${NC}"
-                sed -i.bak 's|image:.*cockroach.*|image: cockroachdb-test-image:latest|g' tests/integration/docker-compose.yml
-                rm -f tests/integration/docker-compose.yml.bak
-            else
-                echo -e "${RED}Failed to build custom image, using standard CockroachDB image${NC}"
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}Failed to build custom image${NC}"
+                return 1
+            fi
+        fi
+
+        # Start just the install test container
+        echo -e "${BLUE}Starting cockroachdb_install test container...${NC}"
+        if ! podman-compose -f tests/integration/docker-compose.yml up -d cockroachdb_install; then
+            echo -e "${YELLOW}podman-compose failed, falling back to direct podman commands...${NC}"
+            podman run -d --name cockroachdb-install-test -p 22022:22 \
+                -e "DEBIAN_FRONTEND=noninteractive" -e "TZ=Etc/UTC" \
+                cockroachdb-test-image:latest /usr/sbin/sshd -D
+
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}Failed to start install test container directly with podman${NC}"
+                return 1
             fi
         fi
     else
-        # Use standard CockroachDB image
-        echo -e "${BLUE}Using standard CockroachDB container image...${NC}"
+        echo -e "${GREEN}Starting CockroachDB server container...${NC}"
 
-        # Make sure docker-compose.yml is using the standard image
-        if [ -f "tests/integration/docker-compose.yml" ] && ! grep -q "image: cockroachdb/cockroach:latest" tests/integration/docker-compose.yml; then
-            echo -e "${YELLOW}Updating docker-compose.yml to use standard CockroachDB image${NC}"
-            sed -i.bak 's|image:.*|image: cockroachdb/cockroach:latest|g' tests/integration/docker-compose.yml
-            rm -f tests/integration/docker-compose.yml.bak
+        # First check if the container already exists and is running
+        if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-server"; then
+            echo -e "${YELLOW}Found existing CockroachDB server container, stopping and removing it...${NC}"
+            podman stop cockroachdb-server 2>/dev/null || true
+            podman rm cockroachdb-server 2>/dev/null || true
         fi
+
+        # Start the CockroachDB server container
+        echo -e "${BLUE}Starting CockroachDB server container...${NC}"
+        if ! podman-compose -f tests/integration/docker-compose.yml up -d cockroachdb; then
+            echo -e "${YELLOW}podman-compose failed, falling back to direct podman commands...${NC}"
+            podman run -d --name cockroachdb-server -p 26257:26257 -p 8080:8080 \
+                cockroachdb/cockroach:latest start-single-node --insecure
+
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}Failed to start CockroachDB server container directly with podman${NC}"
+                return 1
+            fi
+        fi
+
+        # Wait a bit for the CockroachDB server to start
+        echo -e "${YELLOW}Waiting for CockroachDB server to start...${NC}"
+        sleep 5
     fi
 
-    # Try with podman-compose first (with better error handling)
-    echo -e "${BLUE}Attempting to start CockroachDB with podman-compose...${NC}"
-    if podman-compose -f tests/integration/docker-compose.yml up -d; then
-        echo -e "${GREEN}Successfully started CockroachDB with podman-compose${NC}"
-    else
-        # Fall back to direct podman commands if podman-compose fails
-        echo -e "${YELLOW}podman-compose failed, falling back to direct podman commands...${NC}"
-
-        # Get image name from docker-compose file
-        local image_name=$(grep "image:" tests/integration/docker-compose.yml | awk '{print $2}')
-        if [ -z "$image_name" ]; then
-            image_name="cockroachdb/cockroach:latest"
-            echo -e "${YELLOW}No image specified in docker-compose.yml, using default: $image_name${NC}"
-        fi
-
-        echo -e "${BLUE}Starting CockroachDB with podman run...${NC}"
-        podman run --name cockroachdb-install-test -d \
-            -p 26257:26257 -p 8080:8080 \
-            "$image_name" \
-            start-single-node --insecure
-
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Failed to start CockroachDB container directly with podman${NC}"
-            return 1
-        fi
-    fi
-
-    echo -e "${YELLOW}Waiting for SSH server to be ready...${NC}"
-
-    # Give SSH server time to initialize
+    # Wait for service to be ready
     local max_attempts=5
     local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        echo -e "${BLUE}Checking if SSH server is ready (attempt $attempt/$max_attempts)...${NC}"
-        if podman exec cockroachdb-install-test ps -ef | grep -v grep | grep sshd > /dev/null 2>&1; then
-            echo -e "${GREEN}CockroachDB is ready!${NC}"
-            break
-        fi
 
-        if [ $attempt -eq $max_attempts ]; then
-            echo -e "${RED}CockroachDB failed to start properly within the expected time.${NC}"
-            podman logs cockroachdb-install-test
-            return 1
-        fi
+    # Check if we're testing the cockroachdb_install module
+    if grep -q "cockroachdb_install" <<< "$*"; then
+        echo -e "${YELLOW}Waiting for SSH server to be ready...${NC}"
 
-        echo -e "${YELLOW}Waiting for CockroachDB to become available...${NC}"
-        sleep 5
-        (( attempt++ ))
-    done
+        # Give SSH server time to initialize
+        while [ $attempt -le $max_attempts ]; do
+            echo -e "${BLUE}Checking if SSH server is ready (attempt $attempt/$max_attempts)...${NC}"
+            if podman exec cockroachdb-install-test ps -ef | grep -v grep | grep sshd > /dev/null 2>&1; then
+                echo -e "${GREEN}SSH server is ready!${NC}"
+                break
+            fi
+
+            attempt=$((attempt+1))
+            sleep 2
+        done
+    else
+        echo -e "${YELLOW}Waiting for CockroachDB server to be ready...${NC}"
+
+        # Give CockroachDB time to initialize
+        while [ $attempt -le $max_attempts ]; do
+            echo -e "${BLUE}Checking if CockroachDB server is ready (attempt $attempt/$max_attempts)...${NC}"
+            if podman exec cockroachdb-server cockroach node status --insecure > /dev/null 2>&1; then
+                echo -e "${GREEN}CockroachDB server is ready!${NC}"
+                break
+            fi
+
+            if [ $attempt -eq $max_attempts ]; then
+                echo -e "${RED}CockroachDB failed to start properly within the expected time.${NC}"
+                podman logs cockroachdb-server
+                return 1
+            fi
+
+            echo -e "${YELLOW}Waiting for CockroachDB to become available...${NC}"
+            sleep 5
+            (( attempt++ ))
+        done
+    fi
 }
 
 stop_cockroachdb_container() {
-    echo -e "${GREEN}Stopping CockroachDB container...${NC}"
+    echo -e "${GREEN}Stopping containers...${NC}"
 
-    # First try podman-compose
+    # First try podman-compose to stop all containers
     if podman-compose -f tests/integration/docker-compose.yml down 2>/dev/null; then
         echo -e "${GREEN}Successfully stopped containers with podman-compose${NC}"
     else
         # Fall back to direct podman commands
-        echo -e "${YELLOW}Using direct podman commands to stop container...${NC}"
-        podman stop cockroachdb-install-test 2>/dev/null || true
-        podman rm cockroachdb-install-test 2>/dev/null || true
+        echo -e "${YELLOW}Using direct podman commands to stop containers...${NC}"
+
+        # Check for cockroachdb-install-test container
+        if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-install-test"; then
+            echo -e "${YELLOW}Stopping and removing cockroachdb-install-test container...${NC}"
+            podman stop cockroachdb-install-test 2>/dev/null || true
+            podman rm cockroachdb-install-test 2>/dev/null || true
+        fi
+
+        # Check for cockroachdb-server container
+        if podman ps -a --format '{{.Names}}' | grep -q "cockroachdb-server"; then
+            echo -e "${YELLOW}Stopping and removing cockroachdb-server container...${NC}"
+            podman stop cockroachdb-server 2>/dev/null || true
+            podman rm cockroachdb-server 2>/dev/null || true
+        fi
+        podman rm cockroachdb-server 2>/dev/null || true
     fi
 }
 
@@ -333,9 +375,23 @@ run_tests() {
         "integration")
             echo -e "${GREEN}Running integration tests...${NC}"
 
-            # Always use containers for CockroachDB
-            start_cockroachdb_container "integration cockroachdb_install"
-            trap stop_cockroachdb_container EXIT
+            # Check if a specific module is targeted via MODULE_NAME
+            if [[ "$MODULE_NAME" == "cockroachdb_install" ]]; then
+                # Use the install test container only
+                echo -e "${YELLOW}Running tests for cockroachdb_install module...${NC}"
+                start_cockroachdb_container "integration cockroachdb_install"
+                trap stop_cockroachdb_container EXIT
+            elif [[ -n "$MODULE_NAME" ]]; then
+                # Use the standard CockroachDB server container for other modules
+                echo -e "${YELLOW}Running tests for module: $MODULE_NAME...${NC}"
+                start_cockroachdb_container "integration"
+                trap stop_cockroachdb_container EXIT
+            else
+                # No specific module targeted, use standard container
+                echo -e "${YELLOW}Running all integration tests...${NC}"
+                start_cockroachdb_container "integration"
+                trap stop_cockroachdb_container EXIT
+            fi
 
             # Check if the integration tests file exists
             if [ ! -f "tests/integration/integration_tests.yml" ]; then
@@ -412,24 +468,47 @@ EOF
             # Run the integration tests with debug flags
             echo -e "${YELLOW}Running integration tests with verbose output...${NC}"
 
-            # First run the cockroachdb_install module tests if they exist
-            if [ -d "tests/integration/targets/cockroachdb_modules/cockroachdb_install" ]; then
+            # Check if we're testing a specific module
+            if [[ "$MODULE_NAME" == "cockroachdb_install" ]]; then
+                # Run only the cockroachdb_install tests
                 echo -e "${GREEN}Running cockroachdb_install module tests...${NC}"
-
-                # Set environment variables to avoid prompts
                 export DEBIAN_FRONTEND=noninteractive
-
-                # Run the tests
                 ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i tests/integration/inventory tests/integration/targets/cockroachdb_modules/cockroachdb_install/main.yml -vvv
-            fi
+            elif [[ -n "$MODULE_NAME" ]]; then
+                # Run tests for a specific module (not cockroachdb_install)
+                echo -e "${GREEN}Running tests for $MODULE_NAME module...${NC}"
+                ansible-playbook -i tests/integration/inventory tests/integration/integration_tests.yml -vvv -t "$MODULE_NAME"
+            else
+                # Run all tests
+                echo -e "${GREEN}Running all integration tests...${NC}"
 
-            # Then run the standard integration tests
-            echo -e "${GREEN}Running standard integration tests...${NC}"
-            ansible-playbook -i tests/integration/inventory tests/integration/integration_tests.yml -vvv -e "is_ssh_only_container=true"
+                # First run the cockroachdb_install module tests if they exist
+                if [ -d "tests/integration/targets/cockroachdb_modules/cockroachdb_install" ]; then
+                    echo -e "${GREEN}Running cockroachdb_install module tests...${NC}"
+                    export DEBIAN_FRONTEND=noninteractive
+                    ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i tests/integration/inventory tests/integration/targets/cockroachdb_modules/cockroachdb_install/main.yml -vvv
+                fi
+
+                # Then run the standard integration tests
+                echo -e "${GREEN}Running standard integration tests...${NC}"
+                ansible-playbook -i tests/integration/inventory tests/integration/integration_tests.yml -vvv -e "is_ssh_only_container=true"
+            fi
             ;;
         "all")
+            # First run sanity and unit tests
             run_tests "sanity"
             run_tests "unit"
+
+            # Run integration tests with separate containers for different tests
+
+            # First, run tests for cockroachdb_install module
+            echo -e "${YELLOW}Running integration tests for cockroachdb_install module...${NC}"
+            MODULE_NAME="cockroachdb_install"
+            run_tests "integration"
+
+            # Reset MODULE_NAME for other tests
+            MODULE_NAME=""
+            echo -e "${YELLOW}Running integration tests for other modules...${NC}"
             run_tests "integration"
             ;;
     esac

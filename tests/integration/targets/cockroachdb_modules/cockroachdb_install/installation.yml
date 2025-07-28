@@ -134,7 +134,7 @@
   ansible.builtin.command: >
     podman exec cockroachdb-install-test
     bash -c "if [ -f /usr/local/bin/cockroach ] && [ -f /usr/local/lib/cockroach/libgeos.so ]; then
-    echo 'CockroachDB already installed'; exit 0; 
+    echo 'CockroachDB already installed'; exit 0;
     else exit 1; fi"
   register: idempotent_container_result
   changed_when: false
@@ -204,12 +204,12 @@
   ansible.builtin.file:
     path: /usr/local/bin/cockroach
     state: absent
-  become: "{{ not use_custom_container|default(false) }}"
+  become: "{{ not use_custom_container | default(false) }}"
 
 - name: Install CockroachDB with custom URL on local host (mock - we'll use the same binary but with a different prefix)
   rpunt.cockroachdb.cockroachdb_install:
-    version: "custom"
-    custom_url: "https://binaries.cockroachdb.com/cockroach-{{ install_version }}.linux-{{ force_result.architecture|default('amd64') }}.tgz"
+    version: "{{ install_version }}"
+    repo_url: "https://binaries.cockroachdb.com/cockroach-v{{ install_version }}.linux-{{ force_result.architecture | default('amd64') }}.tgz"
   become: true
   register: custom_result
   ignore_errors: true
@@ -238,6 +238,38 @@
       - (custom_result is changed) or (custom_result is skipped) or (custom_container_result is success)
     fail_msg: "Custom installation failed"
   ignore_errors: true
+
+# Start CockroachDB server in container
+- name: Check host platform
+  ansible.builtin.setup:
+    filter: ansible_architecture
+  register: platform_check
+
+- name: Debug platform information
+  ansible.builtin.debug:
+    var: platform_check
+
+- name: Start CockroachDB server in the container
+  ansible.builtin.command: podman exec cockroachdb-install-test /usr/local/bin/cockroach start-single-node --insecure --background
+  when:
+    - use_custom_container|default(false)
+    - platform_check.ansible_facts.ansible_architecture != 'arm64'
+  delegate_to: localhost
+  register: crdb_start_result
+  ignore_errors: yes
+  changed_when: crdb_start_result.rc == 0
+
+- name: Wait for CockroachDB to become available
+  ansible.builtin.wait_for:
+    host: localhost
+    port: 26257
+    state: started
+    timeout: 30
+  when:
+    - use_custom_container|default(false)
+    - crdb_start_result.rc == 0
+  delegate_to: localhost
+  ignore_errors: yes
 
 # Clean up after all tests
 - name: Final cleanup - remove installed binary (may fail due to sudo requirement on host)

@@ -358,24 +358,23 @@ def test_install_cockroachdb_regular(mock_module, mock_os, mock_result):
     version = '22.2.0'
     bin_prefix = 'cockroach-'
     repo_url = 'https://example.com'
-    custom_url = None
     arch = 'amd64'
 
     # Mock install_from_url
     with patch('cockroachdb_install.install_from_url') as mock_install:
         # Call function
         cockroachdb_install.install_cockroachdb(
-            mock_module, version, bin_prefix, repo_url, custom_url, arch, mock_result
+            mock_module, version, bin_prefix, repo_url, arch, mock_result
         )
 
         # Should create lib directory and call install_from_url with correct URL
         mock_os['makedirs'].assert_called_once_with('/usr/local/lib/cockroach', exist_ok=True)
         mock_install.assert_called_once_with(
             mock_module,
-            'https://example.com/cockroach-22.2.0.linux-amd64.tgz',
+            'https://example.com/cockroach-v22.2.0.linux-amd64.tgz',
             mock_result
         )
-        assert mock_result['installation_type'] == 'regular'
+        assert mock_result['installation_type'] == 'binaries'
 
 
 # Test install_cockroachdb function for master version
@@ -384,14 +383,13 @@ def test_install_cockroachdb_master(mock_module, mock_os, mock_result):
     version = 'master'
     bin_prefix = 'cockroach-'
     repo_url = 'https://example.com'
-    custom_url = None
     arch = 'amd64'
 
     # Mock install_from_url
     with patch('cockroachdb_install.install_from_url') as mock_install:
         # Call function
         cockroachdb_install.install_cockroachdb(
-            mock_module, version, bin_prefix, repo_url, custom_url, arch, mock_result
+            mock_module, version, bin_prefix, repo_url, arch, mock_result
         )
 
         # Should call install_from_url with edge-binaries URL
@@ -409,45 +407,49 @@ def test_install_cockroachdb_master(mock_module, mock_os, mock_result):
 # Test install_cockroachdb function for custom version
 def test_install_cockroachdb_custom(mock_module, mock_os, mock_result):
     # Setup parameters
-    version = 'custom'
+    version = '22.2.0'  # Any version, as we're providing a direct tarball URL
     bin_prefix = 'cockroach-'
-    repo_url = 'https://example.com'
-    custom_url = 'https://custom.com/cockroach.tgz'
+    repo_url = 'https://custom.com/cockroach.tgz'  # Direct URL to tarball
     arch = 'amd64'
 
     # Mock install_from_url
     with patch('cockroachdb_install.install_from_url') as mock_install:
         # Call function
         cockroachdb_install.install_cockroachdb(
-            mock_module, version, bin_prefix, repo_url, custom_url, arch, mock_result
+            mock_module, version, bin_prefix, repo_url, arch, mock_result
         )
 
         # Should call install_from_url with custom URL
         mock_os['makedirs'].assert_called_once_with('/usr/local/lib/cockroach', exist_ok=True)
         mock_install.assert_called_once_with(
             mock_module,
-            custom_url,
+            repo_url,
             mock_result
         )
         assert mock_result['installation_type'] == 'custom'
 
 
-def test_install_cockroachdb_custom_no_url(mock_module, mock_os, mock_result):
+def test_install_cockroachdb_invalid_url(mock_module, mock_os, mock_result):
     # Setup parameters
-    version = 'custom'
+    version = '22.2.0'
     bin_prefix = 'cockroach-'
-    repo_url = 'https://example.com'
-    custom_url = None
+    repo_url = 'https://example.com'  # Not a tarball URL
     arch = 'amd64'
 
-    # Call function - should fail because custom_url is required
-    with pytest.raises(Exception, match=r"Module failed"):
+    # Mock install_from_url
+    with patch('cockroachdb_install.install_from_url') as mock_install:
+        # Call function
         cockroachdb_install.install_cockroachdb(
-            mock_module, version, bin_prefix, repo_url, custom_url, arch, mock_result
+            mock_module, version, bin_prefix, repo_url, arch, mock_result
         )
 
-    mock_module.fail_json.assert_called_once()
-    assert "custom_url is required" in mock_module.fail_json.call_args[1]['msg']
+        # Should call install_from_url with repository URL
+        mock_install.assert_called_once_with(
+            mock_module,
+            f'{repo_url}/{bin_prefix}v22.2.0.linux-{arch}.tgz',
+            mock_result
+        )
+        assert mock_result['installation_type'] == 'binaries'
 
 
 # Test install_from_url function

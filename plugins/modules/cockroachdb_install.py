@@ -51,7 +51,6 @@ options:
         description:
             - Version of CockroachDB to install.
             - Use "master" for the latest development version.
-            - Use "custom" for installing from a custom URL.
         required: true
         type: str
     bin_prefix:
@@ -63,15 +62,10 @@ options:
     repo_url:
         description:
             - URL of the repository from which to download CockroachDB.
+            - Can be a direct URL to a tarball for custom installations.
         required: false
         type: str
         default: "https://binaries.cockroachdb.com"
-    custom_url:
-        description:
-            - URL to download a custom binary from.
-            - Only used when version is set to "custom".
-        required: false
-        type: str
     force:
         description:
             - Force reinstallation even if binary already exists.
@@ -97,8 +91,8 @@ EXAMPLES = r'''
 # Install from custom URL
 - name: Install custom CockroachDB
   cockroachdb_install:
-    version: "custom"
-    custom_url: "https://example.com/path/to/cockroach.tgz"
+    version: "22.2.0"
+    repo_url: "https://example.com/path/to/cockroach-v22.2.0.linux-amd64.tgz"
 
 # Force reinstallation of CockroachDB
 - name: Force reinstall CockroachDB
@@ -201,8 +195,8 @@ def is_already_installed(module, version):
         module.debug(f"CockroachDB binary not found at {binary_path}")
         return False
 
-    if version == "master" or version == "custom":
-        # Always reinstall master or custom versions unless we add version detection
+    if version == "master":
+        # Always reinstall master version unless we add version detection
         module.debug(f"Version is '{version}', forcing reinstall")
         return False
 
@@ -313,7 +307,14 @@ def find_and_install_from_directory(module, search_pattern, result):
     return True
 
 
-def install_cockroachdb(module, version, bin_prefix, repo_url, custom_url, arch, result):
+def is_url_to_tarball(url):
+    """
+    Check if URL points directly to a tarball file
+    """
+    return url.endswith('.tgz') or url.endswith('.tar.gz')
+
+
+def install_cockroachdb(module, version, bin_prefix, repo_url, arch, result):
     """
     Central installer function that handles all installation types
     """
@@ -328,20 +329,19 @@ def install_cockroachdb(module, version, bin_prefix, repo_url, custom_url, arch,
         fallback_binary_name = f"cockroach.linux-gnu-{arch}.LATEST"
 
         install_from_url(module, tarball_url, result, fallback_url, fallback_binary_name)
-
-    elif version == "custom":
-        result['installation_type'] = 'custom'
-        if not custom_url:
-            module.fail_json(msg="custom_url is required when version='custom'")
-
-        install_from_url(module, custom_url, result)
-
     else:
-        result['installation_type'] = 'regular'
-        tarball_name = f"{bin_prefix}{version}.linux-{arch}.tgz"
-        download_url = f"{repo_url}/{tarball_name}"
-
-        install_from_url(module, download_url, result)
+        # If repo_url points to a full URL with file extension, use it directly
+        if is_url_to_tarball(repo_url):
+            result['installation_type'] = 'custom'
+            install_from_url(module, repo_url, result)
+        else:
+            # Otherwise use the standard URL format with repository
+            result['installation_type'] = 'binaries'
+            if version != "master":
+                version = "v" + version.lstrip("v")
+            tarball_name = f"{bin_prefix}{version}.linux-{arch}.tgz"
+            download_url = f"{repo_url}/{tarball_name}"
+            install_from_url(module, download_url, result)
 
 
 def install_from_url(module, url, result, fallback_url=None, fallback_binary_name=None):
@@ -450,7 +450,6 @@ def main():
         version=dict(type='str', required=True),
         bin_prefix=dict(type='str', required=False, default='cockroach-'),
         repo_url=dict(type='str', required=False, default='https://binaries.cockroachdb.com'),
-        custom_url=dict(type='str', required=False),
         force=dict(type='bool', required=False, default=False)
     )
 
@@ -472,9 +471,11 @@ def main():
     try:
         # Get module parameters
         version = module.params['version']
+        # Standardize version format: strip leading 'v' if present, then add it back
+        if version != "master":
+            version = "v" + version.lstrip("v")
         bin_prefix = module.params['bin_prefix']
         repo_url = module.params['repo_url']
-        custom_url = module.params['custom_url']
         force = module.params['force']
 
         # Set result version
@@ -493,7 +494,7 @@ def main():
             module.exit_json(**result)
 
         # Install CockroachDB
-        install_cockroachdb(module, version, bin_prefix, repo_url, custom_url, arch, result)
+        install_cockroachdb(module, version, bin_prefix, repo_url, arch, result)
 
     except Exception as e:
         module.fail_json(

@@ -296,7 +296,7 @@
       register: raw_sequence_privs
 
     - name: Debug raw sequence privileges
-      debug:
+      ansible.builtin.debug:
         var: raw_sequence_privs
         verbosity: 0
 
@@ -336,7 +336,7 @@
       register: after_grant_privs
 
     - name: Debug sequence privileges after first grant
-      debug:
+      ansible.builtin.debug:
         var: after_grant_privs
         verbosity: 0
 
@@ -370,12 +370,12 @@
       register: after_second_grant_privs
 
     - name: Debug sequence privileges after second grant
-      debug:
+      ansible.builtin.debug:
         var: after_second_grant_privs
         verbosity: 0
 
     - name: Debug sequence idempotent task result
-      debug:
+      ansible.builtin.debug:
         var: seq_priv_idempotent
         verbosity: 0
 
@@ -431,7 +431,7 @@
       register: after_schema_grant_privs
 
     - name: Debug schema privileges after first grant
-      debug:
+      ansible.builtin.debug:
         var: after_schema_grant_privs
 
     - name: Run the same schema privilege grant again (idempotency check)
@@ -462,11 +462,11 @@
       register: after_schema_second_grant_privs
 
     - name: Debug schema privileges after second grant
-      debug:
+      ansible.builtin.debug:
         var: after_schema_second_grant_privs
 
     - name: Debug schema idempotent task result
-      debug:
+      ansible.builtin.debug:
         var: schema_priv_idempotent
 
     - name: Debug schema privileges after second grant
@@ -480,11 +480,11 @@
       register: after_schema_second_grant_privs
 
     - name: Debug schema privileges after second grant
-      debug:
+      ansible.builtin.debug:
         var: after_schema_second_grant_privs
 
     - name: Display details about schema privileges for debugging
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Schema priv changed status: {{ schema_priv_idempotent.changed | default('unknown') }}"
           - "Schema grants from database: {{ after_schema_second_grant_privs.query_result | default([]) }}"

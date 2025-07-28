@@ -15,19 +15,19 @@
         port: 26257
         delay: 10
         timeout: 60
-      when: not is_ssh_only_container|default(false)
+      when: not is_ssh_only_container | default(false)
       tags:
         - always
-        - cockroachdb_install
+        - not_install
 
     - name: Check CockroachDB version
-      ansible.builtin.command: podman exec cockroachdb-install-test cockroach version
+      ansible.builtin.command: podman exec cockroachdb-server cockroach version --insecure
       register: cockroach_version
       changed_when: false
-      when: not is_ssh_only_container|default(false)
+      when: not is_ssh_only_container | default(false)
       tags:
         - always
-        - cockroachdb_install
+        - not_install
       ignore_errors: true
 
     - name: Debug - show CockroachDB version
@@ -36,7 +36,7 @@
       when: cockroach_version is success
       tags:
         - always
-        - cockroachdb_install
+        - not_install
 
     # Test installation module specifically
     - name: Check if custom install test container is running

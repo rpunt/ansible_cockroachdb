@@ -5,6 +5,7 @@
 ### Ansible Collections ###
 ansible_collections/
 *.tar.gz
+*.tgz
 
 ### Testing data ###
 cockroach-data/

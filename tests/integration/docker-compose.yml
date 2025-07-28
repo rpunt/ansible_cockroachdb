@@ -1,8 +1,8 @@
 version: '3'
 
 services:
-  cockroachdb:
-    # This will be dynamically replaced with custom image when needed
+  # Ubuntu container for testing cockroachdb_install module
+  cockroachdb_install:
     image: cockroachdb-test-image:latest
     container_name: cockroachdb-install-test
     command: /usr/sbin/sshd -D
@@ -11,6 +11,17 @@ services:
     environment:
       - DEBIAN_FRONTEND=noninteractive
       - TZ=Etc/UTC
+    networks:
+      - test_network
+
+  # CockroachDB container for testing all other modules
+  cockroachdb:
+    image: cockroachdb/cockroach:latest
+    container_name: cockroachdb-server
+    command: start-single-node --insecure
+    ports:
+      - "26257:26257"
+      - "8080:8080"
     networks:
       - test_network
 
