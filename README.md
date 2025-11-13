@@ -15,14 +15,14 @@ This collection is maintained by Cockroach Labs.
 Before using the CockroachDB collection, you need to install it with the `ansible-galaxy` CLI:
 
 ```bash
-ansible-galaxy collection install cockroach_labs.cockroachdb
+ansible-galaxy collection install rpunt.cockroachdb
 ```
 
 You can also include it in a `requirements.yml` file and install it via `ansible-galaxy collection install -r requirements.yml` using the format:
 
 ```yaml
 collections:
-- name: cockroach_labs.cockroachdb
+- name: rpunt.cockroachdb
 ```
 
 ### Building and Installing from Source
@@ -53,7 +53,7 @@ Once installed, you can reference modules in your playbooks:
 
 ```yaml
 - name: Manage CockroachDB parameters
-  cockroach_labs.cockroachdb.cockroachdb_parameter:
+  rpunt.cockroachdb.cockroachdb_parameter:
     parameters:
       sql.defaults.distsql: "on"
       kv.rangefeed.enabled: true

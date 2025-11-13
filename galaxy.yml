@@ -1,6 +1,6 @@
 namespace: rpunt
 name: cockroachdb
-version: 1.0.0
+version: 1.0.1
 readme: README.md
 authors:
   - Ryan Punt @rpunt
@@ -11,10 +11,10 @@ tags:
   - cockroachdb
   - sql
 dependencies: {}
-repository: https://github.com/yourusername/ansible-cockroachdb
-documentation: https://github.com/yourusername/ansible-cockroachdb/blob/main/README.md
-homepage: https://github.com/yourusername/ansible-cockroachdb
-issues: https://github.com/yourusername/ansible-cockroachdb/issues
+repository: https://github.com/rpunt/ansible_cockroachdb
+documentation: https://github.com/rpunt/ansible_cockroachdb/blob/main/README.md
+homepage: https://github.com/rpunt/ansible_cockroachdb
+issues: https://github.com/rpunt/ansible_cockroachdb/issues
 build_ignore:
   - cockroach-data
   - "*.tar.gz"
