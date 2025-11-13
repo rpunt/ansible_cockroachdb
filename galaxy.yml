@@ -11,10 +11,10 @@ tags:
   - cockroachdb
   - sql
 dependencies: {}
-repository: https://github.com/yourusername/ansible-cockroachdb
-documentation: https://github.com/yourusername/ansible-cockroachdb/blob/main/README.md
-homepage: https://github.com/yourusername/ansible-cockroachdb
-issues: https://github.com/yourusername/ansible-cockroachdb/issues
+repository: https://github.com/rpunt/ansible_cockroachdb
+documentation: https://github.com/rpunt/ansible_cockroachdb/blob/main/README.md
+homepage: https://github.com/rpunt/ansible_cockroachdb
+issues: https://github.com/rpunt/ansible_cockroachdb/issues
 build_ignore:
   - cockroach-data
   - "*.tar.gz"

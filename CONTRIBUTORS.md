@@ -4,9 +4,9 @@ This project was created by:
 
 ## Core Developers
 
-- Your Name - Initial work and project setup
+- Ryan Punt <ryan@mirum.org> - Initial work and project setup
 
-## Contributors
+## Other Contributors
 
 We appreciate all contributions. If you contribute to this project, please add your name here.
 

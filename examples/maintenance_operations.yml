@@ -80,7 +80,6 @@
       register: gc_configs
 
 
-
     # Clean up orphaned schema objects
     - name: Clean up schema objects
       cockroachdb_maintenance:
